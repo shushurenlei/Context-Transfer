@@ -79,6 +79,15 @@ pub fn list_sessions(project_path: &str) -> Result<Vec<Session>, String> {
     Ok(sessions)
 }
 
+/// 安全截断字符串（按字符边界，不 panic）
+fn truncate_str(s: &str, max_chars: usize) -> &str {
+    if s.chars().count() <= max_chars {
+        return s;
+    }
+    let idx = s.char_indices().nth(max_chars).map(|(i, _)| i).unwrap_or(s.len());
+    &s[..idx]
+}
+
 /// 将单个工具调用摘要为可读文本
 fn tool_call_summary(tc: &serde_json::Value) -> String {
     let name = tc.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
@@ -93,17 +102,19 @@ fn tool_call_summary(tc: &serde_json::Value) -> String {
 
     if let Some(input) = tc.get("input") {
         if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
-            return format!("执行: {}", &cmd[..cmd.len().min(80)]);
+            return format!("执行: {}", truncate_str(cmd, 80));
         }
         if let Some(desc) = input.get("description").and_then(|v| v.as_str()) {
-            return format!("{}: {}", name, &desc[..desc.len().min(80)]);
+            return format!("{}: {}", name, truncate_str(desc, 80));
         }
         if let Some(p) = input.get("path").and_then(|v| v.as_str()) {
-            return format!("{}: {}", name, &p[..p.len().min(80)]);
+            return format!("{}: {}", name, truncate_str(p, 80));
         }
+        let input_str = input.to_string();
+        return format!("{}: {}", name, truncate_str(&input_str, 80));
     }
 
-    format!("{}: {}", name, &tc.get("input").map(|v| v.to_string()).unwrap_or_default()[..80.min(tc.get("input").map(|v| v.to_string()).unwrap_or_default().len())])
+    format!("{}: {}", name, truncate_str(&tc.get("input").map(|v| v.to_string()).unwrap_or_default(), 80))
 }
 
 /// 解析 Claude Code 会话 jsonl

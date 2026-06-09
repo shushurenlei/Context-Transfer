@@ -2,6 +2,15 @@
 
 use crate::claud_extractor::ContextInfo;
 
+/// 安全截断字符串（按字符边界）
+fn truncate(s: &str, max_chars: usize) -> &str {
+    if s.chars().count() <= max_chars {
+        return s;
+    }
+    let idx = s.char_indices().nth(max_chars).map(|(i, _)| i).unwrap_or(s.len());
+    &s[..idx]
+}
+
 /// 将上下文格式化为 Markdown 文档
 pub fn format_as_markdown(context: &ContextInfo, max_content_length: usize) -> String {
     let mut lines = Vec::new();
@@ -10,7 +19,7 @@ pub fn format_as_markdown(context: &ContextInfo, max_content_length: usize) -> S
     lines.push(String::new());
     lines.push(format!(
         "> 从 Claude Code 会话 `{}...` 迁移",
-        &context.session_id[..16.min(context.session_id.len())]
+        truncate(&context.session_id, 16)
     ));
     lines.push(format!("> 项目路径: `{}`", context.project_path));
     if let Some(ref branch) = context.git_branch {
@@ -35,10 +44,9 @@ pub fn format_as_markdown(context: &ContextInfo, max_content_length: usize) -> S
     lines.push(format!("- 对话轮次共 {} 条", context.messages.len()));
     if !user_questions.is_empty() {
         lines.push(String::new());
-        let first = &user_questions[0].content;
         lines.push(format!(
             "核心问题: {}",
-            &first[..200.min(first.len())]
+            truncate(&user_questions[0].content, 200)
         ));
     }
     lines.push(String::new());
@@ -50,15 +58,15 @@ pub fn format_as_markdown(context: &ContextInfo, max_content_length: usize) -> S
     let mut turn_num = 0usize;
 
     for msg in &context.messages {
-        let content = if msg.content.len() > max_content_length {
-            format!("{}...[已截断]", &msg.content[..max_content_length])
+        let content = if msg.content.chars().count() > max_content_length {
+            format!("{}...[已截断]", truncate(&msg.content, max_content_length))
         } else {
             msg.content.clone()
         };
 
         if msg.role == "user" {
             if msg.content.starts_with("↩") {
-                lines.push(format!("**工具输出**: {}", &content[..200.min(content.len())]));
+                lines.push(format!("**工具输出**: {}", truncate(&content, 200)));
                 lines.push(String::new());
             } else {
                 turn_num += 1;
@@ -94,10 +102,9 @@ pub fn format_as_prompt(context: &ContextInfo, max_content_length: usize) -> Str
         .find(|m| m.role == "user" && !m.content.starts_with("↩"));
 
     if let Some(msg) = first_user {
-        let text = &msg.content;
         lines.push(format!(
             "【核心需求】{}",
-            &text[..max_content_length.min(text.len())]
+            truncate(&msg.content, max_content_length)
         ));
         lines.push(String::new());
     }
