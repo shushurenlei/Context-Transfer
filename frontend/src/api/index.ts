@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 
+export interface ProjectEntry {
+  path: string
+  dir_name: string
+  has_sessions: boolean
+}
+
 export interface Session {
   session_id: string
   modified: number
@@ -37,6 +43,8 @@ export interface ExportResult {
 
 export const api = {
   detectProject: () => invoke<string>('detect_project'),
+
+  listProjects: () => invoke<ProjectEntry[]>('list_projects'),
 
   listSessions: (projectPath: string) =>
     invoke<Session[]>('list_sessions', { projectPath }),

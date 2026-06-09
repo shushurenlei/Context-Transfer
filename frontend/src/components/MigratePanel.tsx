@@ -30,7 +30,7 @@ const MODE_OPTIONS: { mode: MigrateMode; label: string; desc: string; icon: stri
   },
 ]
 
-export default function MigratePanel({ projectPath, sessionId, onComplete }: MigratePanelProps) {
+export default function MigratePanel({ projectPath, sessionId, onComplete: _onComplete }: MigratePanelProps) {
   const [selectedMode, setSelectedMode] = useState<MigrateMode>('prompt')
   const [maxTurns, setMaxTurns] = useState(50)
   const [maxLength, setMaxLength] = useState(2000)

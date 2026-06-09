@@ -1,6 +1,6 @@
 //! Tauri Commands - 暴露给前端的 API
 
-use crate::claud_extractor::{self, ContextInfo, Session};
+use crate::claud_extractor::{self, ContextInfo, Session, ProjectEntry};
 use crate::codex_injector;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -167,6 +167,12 @@ pub fn export_context(request: ExportRequest) -> Result<ExportResult, String> {
         success: true,
         filepath: filepath.to_string_lossy().to_string(),
     })
+}
+
+/// 列出所有已知的 Claude Code 项目
+#[tauri::command]
+pub fn list_projects() -> Result<Vec<ProjectEntry>, String> {
+    claud_extractor::list_projects()
 }
 
 use std::fs;

@@ -11,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::detect_project,
+            commands::list_projects,
             commands::list_sessions,
             commands::extract_context,
             commands::migrate,

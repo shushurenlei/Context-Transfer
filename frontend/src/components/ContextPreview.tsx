@@ -4,7 +4,7 @@ interface ContextPreviewProps {
   context: ContextInfo
 }
 
-function MessageBubble({ msg, index }: { msg: Message; index: number }) {
+function MessageBubble({ msg, index: _index }: { msg: Message; index: number }) {
   const isUser = msg.role === 'user'
   const isToolResult = msg.content.startsWith('↩')
 

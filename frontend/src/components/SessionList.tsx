@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import type { Session } from '../api'
+import type { Session, ProjectEntry } from '../api'
 
 interface SessionListProps {
   sessions: Session[]
   loading: boolean
   projectPath: string
+  knownProjects: ProjectEntry[]
   onSelect: (sessionId: string) => void
   onUseLatest: () => void
   onRefresh: () => void
@@ -25,8 +26,9 @@ function formatSize(bytes: number): string {
 }
 
 export default function SessionList({
-  sessions, loading, projectPath,
+  sessions, loading, knownProjects,
   onSelect, onUseLatest, onRefresh,
+  onProjectPathChange,
 }: SessionListProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -68,11 +70,38 @@ export default function SessionList({
           加载会话列表...
         </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-20">
+        <div className="text-center py-12">
           <p className="text-[var(--text-secondary)] text-lg mb-2">未找到 Claude Code 会话</p>
-          <p className="text-[var(--text-secondary)] text-sm">
-            请确认项目路径正确，且在 Claude Code 中使用过该项目
+          <p className="text-[var(--text-secondary)] text-sm mb-6">
+            请确认项目路径正确，或在下方选择一个已知项目
           </p>
+          {knownProjects.length > 0 && (
+            <div className="max-w-lg mx-auto">
+              <p className="text-xs text-[var(--text-secondary)] mb-3 uppercase tracking-wide">
+                已知的 Claude Code 项目
+              </p>
+              <div className="space-y-1.5">
+                {knownProjects
+                  .filter(p => p.has_sessions)
+                  .map(p => (
+                    <button
+                      key={p.path}
+                      onClick={() => onProjectPathChange(p.path)}
+                      className="w-full text-left px-4 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-mono text-[var(--text-primary)] truncate">
+                          {p.path.split('/').pop() || p.path}
+                        </span>
+                        <span className="text-xs text-[var(--text-secondary)] font-mono opacity-50 group-hover:opacity-100 truncate max-w-[50%]">
+                          {p.path}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

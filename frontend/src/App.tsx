@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, Session, ContextInfo } from './api'
+import { api, Session, ContextInfo, ProjectEntry } from './api'
 import SessionList from './components/SessionList'
 import ContextPreview from './components/ContextPreview'
 import MigratePanel from './components/MigratePanel'
@@ -15,13 +15,18 @@ export default function App() {
   const [step, setStep] = useState<Step>('select')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [knownProjects, setKnownProjects] = useState<ProjectEntry[]>([])
 
-  // 自动检测项目路径
+  // 自动检测项目路径 + 加载已知项目
   useEffect(() => {
     api.detectProject()
       .then(setProjectPath)
       .catch(() => setProjectPath('/'))
+    api.listProjects()
+      .then(setKnownProjects)
+      .catch(() => {})
   }, [])
+
 
   // 加载会话列表
   const loadSessions = useCallback(async (path: string) => {
@@ -97,6 +102,7 @@ export default function App() {
             sessions={sessions}
             loading={loading}
             projectPath={projectPath}
+            knownProjects={knownProjects}
             onSelect={handleSelectSession}
             onUseLatest={handleUseLatest}
             onRefresh={() => loadSessions(projectPath)}

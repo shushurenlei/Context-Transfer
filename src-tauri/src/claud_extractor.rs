@@ -327,3 +327,81 @@ pub fn extract_context(
         git_branch,
     })
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectEntry {
+    pub path: String,
+    pub dir_name: String,
+    pub has_sessions: bool,
+}
+
+/// 扫描 ~/.claude/projects/ 列出所有已知项目
+pub fn list_projects() -> Result<Vec<ProjectEntry>, String> {
+    let projects_dir = claude_home().join("projects");
+    if !projects_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut projects = Vec::new();
+    let entries = fs::read_dir(&projects_dir)
+        .map_err(|e| format!("读取项目目录失败: {}", e))?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let dir_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let has_sessions = fs::read_dir(&path)
+            .map(|mut d| {
+                d.any(|e| {
+                    e.as_ref()
+                        .ok()
+                        .and_then(|e| e.path().extension().and_then(|ext| ext.to_str().map(|s| s == "jsonl")))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+
+        // 从 jsonl 文件中读取真实 cwd
+        let cwd = {
+            let mut found = None;
+            if let Ok(mut entries) = fs::read_dir(&path) {
+                while let Some(Ok(e)) = entries.next() {
+                    if e.path().extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                        continue;
+                    }
+                    if let Ok(content) = fs::read_to_string(e.path()) {
+                        for line in content.lines().take(50) {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                                if let Some(c) = val.get("cwd").and_then(|v| v.as_str()) {
+                                    found = Some(c.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if found.is_some() {
+                        break;
+                    }
+                }
+            }
+            found.unwrap_or(dir_name.clone())
+        };
+
+        projects.push(ProjectEntry {
+            path: cwd,
+            dir_name,
+            has_sessions,
+        });
+    }
+
+    projects.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(projects)
+}
