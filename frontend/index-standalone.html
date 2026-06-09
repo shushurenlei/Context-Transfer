@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Context Reset - 上下文迁移</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #1e293b;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --border: #334155;
+    }
+    body { margin: 0; background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-type="module">
+const { useState, useEffect, useCallback } = React;
+
+const API_BASE = '/api';
+
+async function fetchJSON(url, options) {
+  const res = await fetch(`${API_BASE}${url}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
+}
+
+const api = {
+  detectProject: () => fetchJSON('/detect-project'),
+  listSessions: (p) => fetchJSON(`/sessions?project_path=${encodeURIComponent(p)}`),
+  extractContext: (p, sid, mt) => fetchJSON('/extract', {
+    method: 'POST', body: JSON.stringify({ project_path: p, session_id: sid, max_turns: mt }),
+  }),
+  migrate: (p, mode, opts) => fetchJSON('/migrate', {
+    method: 'POST', body: JSON.stringify({ project_path: p, mode, ...opts }),
+  }),
+  copyPrompt: (p, sid, mt) => fetchJSON('/copy-prompt', {
+    method: 'POST', body: JSON.stringify({ project_path: p, session_id: sid, max_turns: mt }),
+  }),
+  cleanup: (p) => fetchJSON('/cleanup', {
+    method: 'POST', body: JSON.stringify({ project_path: p }),
+  }),
+};
+
+function formatTime(ts) {
+  return new Date(ts * 1000).toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+}
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes/1024).toFixed(1)}KB`;
+  return `${(bytes/(1024*1024)).toFixed(1)}MB`;
+}
+
+// --- Header ---
+function Header({ projectPath, onProjectPathChange }) {
+  return (
+    <header style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }} className="px-6 py-4">
+      <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div style={{ background: 'var(--accent)' }} className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-lg">🔄</div>
+          <div>
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Context Reset</h1>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Claude Code → Codex 上下文迁移</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>项目路径</label>
+          <input
+            type="text" value={projectPath}
+            onChange={e => onProjectPathChange(e.target.value)}
+            style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            className="border rounded-md px-3 py-1.5 text-sm w-72 focus:outline-none"
+            placeholder="/path/to/project"
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// --- SessionList ---
+function SessionList({ sessions, loading, onSelect, onUseLatest, onRefresh }) {
+  const [hoveredId, setHoveredId] = useState(null);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-medium" style={{ color: 'var(--text-primary)' }}>Claude Code 会话</h2>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>选择一个会话来提取上下文</p>
+        </div>
+        <div className="flex gap-2">
+          {sessions.length > 0 && (
+            <button onClick={onUseLatest}
+              style={{ background: 'var(--accent)' }}
+              className="px-4 py-2 rounded-lg hover:opacity-90 text-white text-sm font-medium transition-colors">
+              使用最新会话
+            </button>
+          )}
+          <button onClick={onRefresh} disabled={loading}
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            className="px-3 py-2 rounded-lg border hover:bg-gray-800 text-sm transition-colors disabled:opacity-50">
+            {loading ? '加载中...' : '刷新'}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20" style={{ color: 'var(--text-secondary)' }}>
+          <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mr-3" />
+          加载会话列表...
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="text-center py-20">
+          <p className="text-lg mb-2" style={{ color: 'var(--text-secondary)' }}>未找到 Claude Code 会话</p>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>请确认项目路径正确</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sessions.map((s, i) => (
+            <button key={s.session_id} onClick={() => onSelect(s.session_id)}
+              onMouseEnter={() => setHoveredId(s.session_id)}
+              onMouseLeave={() => setHoveredId(null)}
+              style={{
+                background: hoveredId === s.session_id ? 'rgba(99,102,241,0.05)' : 'var(--bg-card)',
+                borderColor: hoveredId === s.session_id ? 'var(--accent)' : 'var(--border)',
+              }}
+              className="w-full text-left p-4 rounded-lg border transition-all">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>#{i+1}</span>
+                  <span className="text-sm font-mono" style={{ color: 'var(--text-primary)' }}>{s.session_id.slice(0,20)}...</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  <span>{formatTime(s.modified)}</span>
+                  <span>{formatSize(s.size)}</span>
+                  {hoveredId === s.session_id && <span style={{ color: 'var(--accent)' }}>→ 点击提取</span>}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- ContextPreview ---
+function ContextPreview({ context }) {
+  const userMsgs = context.messages.filter(m => m.role === 'user' && !m.content.startsWith('↩'));
+  return (
+    <div style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }} className="border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>上下文预览</h3>
+          <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(99,102,241,0.2)', color: 'var(--accent)' }}>
+            {context.messages.length} 条消息
+          </span>
+        </div>
+        <div className="flex gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <span>📁 {context.project_path}</span>
+          {context.git_branch && <span>🌿 {context.git_branch}</span>}
+          <span>👤 用户提问 {userMsgs.length} 次</span>
+        </div>
+      </div>
+      <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+        {context.messages.map((msg, i) => {
+          const isUser = msg.role === 'user';
+          const isToolResult = msg.content.startsWith('↩');
+          if (isUser && isToolResult) {
+            return <div key={i} className="py-1 px-3 text-xs rounded border max-h-16 overflow-hidden" style={{ color: 'var(--text-secondary)', background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>{msg.content.slice(0,150)}</div>;
+          }
+          return (
+            <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm leading-relaxed ${isUser ? 'text-white' : ''}`}
+                style={{ background: isUser ? 'var(--accent)' : 'var(--bg-secondary)', color: isUser ? 'white' : 'var(--text-primary)', borderColor: isUser ? 'transparent' : 'var(--border)', border: isUser ? 'none' : '1px solid var(--border)' }}>
+                <div className="text-xs opacity-60 mb-1">{isUser ? '👤 用户' : '🤖 助手'}</div>
+                {msg.content.length > 500 ? msg.content.slice(0,500) + '...' : msg.content}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- MigratePanel ---
+const MODE_OPTIONS = [
+  { mode: 'prompt', label: 'Prompt 模式', desc: '生成文本并复制到剪贴板', icon: '📋' },
+  { mode: 'agents-md', label: 'AGENTS.md 模式', desc: '写入项目 AGENTS.md', icon: '📝' },
+  { mode: 'auto', label: '一键自动模式', desc: '写入并启动 Codex', icon: '🚀' },
+];
+
+function MigratePanel({ projectPath, sessionId, onComplete }) {
+  const [selectedMode, setSelectedMode] = useState('prompt');
+  const [maxTurns, setMaxTurns] = useState(50);
+  const [migrating, setMigrating] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleMigrate = async () => {
+    setMigrating(true); setResult(null);
+    try {
+      if (selectedMode === 'prompt') {
+        const res = await api.copyPrompt(projectPath, sessionId, maxTurns);
+        setResult({ success: res.success, message: '📋 上下文已复制到剪贴板，在 Codex 中粘贴即可' });
+      } else {
+        const res = await api.migrate(projectPath, selectedMode, { session_id: sessionId, max_turns: maxTurns });
+        setResult({ success: res.success, message: res.message });
+      }
+    } catch (e) { setResult({ success: false, message: e.message }); }
+    finally { setMigrating(false); }
+  };
+
+  const handleCleanup = async () => {
+    try {
+      const res = await api.cleanup(projectPath);
+      setResult({ success: res.cleaned, message: res.message });
+    } catch (e) { setResult({ success: false, message: e.message }); }
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }} className="border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>迁移到 Codex</h3>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>选择注入方式，将上下文迁移到 Codex CLI</p>
+      </div>
+      <div className="p-5 space-y-5">
+        <div className="grid grid-cols-3 gap-3">
+          {MODE_OPTIONS.map(opt => (
+            <button key={opt.mode} onClick={() => setSelectedMode(opt.mode)}
+              style={{
+                borderColor: selectedMode === opt.mode ? 'var(--accent)' : 'var(--border)',
+                background: selectedMode === opt.mode ? 'rgba(99,102,241,0.1)' : 'var(--bg-primary)',
+              }}
+              className="p-4 rounded-lg border text-left transition-all hover:border-indigo-500/50">
+              <div className="text-2xl mb-2">{opt.icon}</div>
+              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{opt.label}</div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs block mb-1" style={{ color: 'var(--text-secondary)' }}>最大轮次</label>
+            <input type="number" value={maxTurns} onChange={e => setMaxTurns(Number(e.target.value))}
+              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              className="w-full border rounded-md px-3 py-1.5 text-sm focus:outline-none" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={handleMigrate} disabled={migrating}
+            style={{ background: migrating ? 'var(--accent)' : 'var(--accent)' }}
+            className="flex-1 py-3 rounded-lg hover:opacity-90 text-white font-medium transition-colors disabled:opacity-50">
+            {migrating ? '迁移中...' : `🔄 开始迁移（${MODE_OPTIONS.find(o => o.mode === selectedMode)?.label}）`}
+          </button>
+          <button onClick={handleCleanup}
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            className="px-4 py-3 rounded-lg border hover:bg-gray-800 text-sm transition-colors">
+            清理迁移
+          </button>
+        </div>
+        {result && (
+          <div className={`p-3 rounded-lg text-sm ${result.success ? 'border border-green-500/50 bg-green-900/30 text-green-300' : 'border border-red-500/50 bg-red-900/30 text-red-300'}`}>
+            {result.message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- App ---
+function App() {
+  const [projectPath, setProjectPath] = useState('');
+  const [sessions, setSessions] = useState([]);
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [context, setContext] = useState(null);
+  const [step, setStep] = useState('select');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    api.detectProject().then(setProjectPath).catch(() => setProjectPath('/'));
+  }, []);
+
+  const loadSessions = useCallback(async (path) => {
+    setLoading(true); setError(null);
+    try { const list = await api.listSessions(path); setSessions(list); }
+    catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { if (projectPath) loadSessions(projectPath); }, [projectPath, loadSessions]);
+
+  const handleSelectSession = async (sid) => {
+    setSelectedSession(sid); setLoading(true); setError(null);
+    try {
+      const ctx = await api.extractContext(projectPath, sid);
+      setContext(ctx); setStep('preview');
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const handleUseLatest = () => sessions.length > 0 && handleSelectSession(sessions[0].session_id);
+  const handleBack = () => { setStep('select'); setContext(null); setSelectedSession(null); };
+  const handleMigrateDone = () => { setStep('select'); setContext(null); setSelectedSession(null); loadSessions(projectPath); };
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+      <Header projectPath={projectPath} onProjectPathChange={p => { setProjectPath(p); loadSessions(p); }} />
+      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-6">
+        {error && (
+          <div className="mb-4 p-3 rounded-lg border text-sm" style={{ background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.5)', color: '#fca5a5' }}>{error}</div>
+        )}
+        {step === 'select' && (
+          <SessionList sessions={sessions} loading={loading} onSelect={handleSelectSession} onUseLatest={handleUseLatest} onRefresh={() => loadSessions(projectPath)} />
+        )}
+        {step === 'preview' && context && (
+          <div className="space-y-4">
+            <button onClick={handleBack} className="text-sm flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>← 返回会话列表</button>
+            <ContextPreview context={context} />
+            <MigratePanel projectPath={projectPath} sessionId={selectedSession} onComplete={handleMigrateDone} />
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
