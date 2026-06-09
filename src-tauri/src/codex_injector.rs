@@ -92,19 +92,25 @@ pub fn cleanup_agents_md(project_path: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-/// 启动 Codex CLI
+/// 启动 Codex CLI（通过 login shell 确保能找到 homebrew 安装的命令）
 pub fn launch_codex(project_path: &str, model: Option<&str>) -> Result<u32, String> {
-    let mut cmd = Command::new("codex");
-    if let Some(m) = model {
-        cmd.args(["--model", m]);
-    }
+    let codex_args = match model {
+        Some(m) => format!("codex --model {}", shell_escape(m)),
+        None => "codex".to_string(),
+    };
 
-    let child = cmd
+    let child = Command::new("/bin/zsh")
+        .args(["-l", "-c", &codex_args])
         .current_dir(project_path)
         .spawn()
         .map_err(|e| format!("启动 Codex 失败: {}", e))?;
 
     Ok(child.id())
+}
+
+/// 简单 shell 参数转义，防止命令注入
+fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 /// 执行迁移操作
