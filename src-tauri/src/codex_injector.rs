@@ -99,11 +99,22 @@ pub fn launch_codex(project_path: &str, model: Option<&str>) -> Result<u32, Stri
         None => "codex".to_string(),
     };
 
-    // 拼接 shell 命令：先 cd 到项目目录，再 source ~/.zshrc 确保 PATH，最后启动 codex
+    let escaped_path = project_path.replace('\'', "'\\''");
+
+    // 拼接 shell 命令
+    let shell_cmd = format!("cd '{}' && source ~/.zshrc 2>/dev/null; {}", escaped_path, codex_cmd);
+
+    // 判断 Terminal 是否已在运行，避免启动时多开一个默认窗口
     let script = format!(
-        "tell app \"Terminal\" to do script \"cd '{}' && source ~/.zshrc 2>/dev/null; {}\"",
-        project_path.replace('\'', "'\\''"),
-        codex_cmd,
+        "tell app \"Terminal\"\n\
+         \x20 if (count of windows) = 0 then\n\
+         \x20 \x20 do script \"{0}\"\n\
+         \x20 else\n\
+         \x20 \x20 do script \"{0}\" in front window\n\
+         \x20 end if\n\
+         \x20 activate\n\
+         end tell",
+        shell_cmd.replace('\"', "\\\"")
     );
 
     let child = Command::new("osascript")
