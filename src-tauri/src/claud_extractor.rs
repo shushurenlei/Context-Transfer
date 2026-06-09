@@ -118,7 +118,7 @@ fn tool_call_summary(tc: &serde_json::Value) -> String {
 }
 
 /// 解析 Claude Code 会话 jsonl
-pub fn parse_session(jsonl_path: &Path, max_turns: usize) -> Result<Vec<Message>, String> {
+pub fn parse_session(jsonl_path: &Path, max_turns: Option<usize>) -> Result<Vec<Message>, String> {
     let content = fs::read_to_string(jsonl_path)
         .map_err(|e| format!("读取会话文件失败: {}", e))?;
 
@@ -274,14 +274,17 @@ pub fn parse_session(jsonl_path: &Path, max_turns: usize) -> Result<Vec<Message>
         merged.push(msg);
     }
 
-    Ok(merged.into_iter().take(max_turns).collect())
+    match max_turns {
+        Some(limit) => Ok(merged.into_iter().take(limit).collect()),
+        None => Ok(merged),
+    }
 }
 
 /// 从 Claude Code 提取完整上下文信息
 pub fn extract_context(
     project_path: &str,
     session_id: Option<&str>,
-    max_turns: usize,
+    max_turns: Option<usize>,
 ) -> Result<ContextInfo, String> {
     let sessions = list_sessions(project_path)?;
     if sessions.is_empty() {

@@ -49,7 +49,7 @@ export const api = {
   listSessions: (projectPath: string) =>
     invoke<Session[]>('list_sessions', { projectPath }),
 
-  extractContext: (projectPath: string, sessionId?: string, maxTurns = 50) =>
+  extractContext: (projectPath: string, sessionId?: string, maxTurns: number | null = null) =>
     invoke<ContextInfo>('extract_context', {
       request: {
         projectPath,
@@ -61,7 +61,7 @@ export const api = {
   migrate: (projectPath: string, mode: 'prompt' | 'agents-md' | 'auto', options?: {
     sessionId?: string
     model?: string
-    maxTurns?: number
+    maxTurns?: number | null
     maxLength?: number
   }) =>
     invoke<MigrateResult>('migrate', {
@@ -70,12 +70,12 @@ export const api = {
         mode,
         sessionId: options?.sessionId || null,
         model: options?.model || null,
-        maxTurns: options?.maxTurns || 50,
+        maxTurns: options?.maxTurns ?? null,
         maxLength: options?.maxLength || 2000,
       },
     }),
 
-  copyPrompt: (projectPath: string, sessionId?: string, maxTurns = 50) =>
+  copyPrompt: (projectPath: string, sessionId?: string, maxTurns: number | null = null) =>
     invoke<{ success: boolean; prompt: string }>('copy_prompt', {
       request: {
         projectPath,
@@ -89,7 +89,7 @@ export const api = {
       request: { projectPath },
     }),
 
-  exportContext: (projectPath: string, sessionId?: string, maxTurns = 50, maxLength = 2000) =>
+  exportContext: (projectPath: string, sessionId?: string, maxTurns: number | null = null, maxLength = 2000) =>
     invoke<ExportResult>('export_context', {
       request: {
         projectPath,

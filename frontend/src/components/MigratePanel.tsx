@@ -32,7 +32,7 @@ const MODE_OPTIONS: { mode: MigrateMode; label: string; desc: string; icon: stri
 
 export default function MigratePanel({ projectPath, sessionId, onComplete: _onComplete }: MigratePanelProps) {
   const [selectedMode, setSelectedMode] = useState<MigrateMode>('prompt')
-  const [maxTurns, setMaxTurns] = useState(50)
+  const [maxTurns, setMaxTurns] = useState<number | null>(null)
   const [maxLength, setMaxLength] = useState(2000)
   const [model, setModel] = useState('')
   const [migrating, setMigrating] = useState(false)
@@ -103,8 +103,9 @@ export default function MigratePanel({ projectPath, sessionId, onComplete: _onCo
             <label className="text-xs text-[var(--text-secondary)] block mb-1">最大轮次</label>
             <input
               type="number"
-              value={maxTurns}
-              onChange={e => setMaxTurns(Number(e.target.value))}
+              value={maxTurns ?? ''}
+              onChange={e => setMaxTurns(e.target.value ? Number(e.target.value) : null)}
+              placeholder="不限"
               className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
             />
           </div>

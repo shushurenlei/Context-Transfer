@@ -89,7 +89,7 @@ pub fn extract_context(request: ExtractRequest) -> Result<ContextInfo, String> {
     claud_extractor::extract_context(
         &request.project_path,
         request.session_id.as_deref(),
-        request.max_turns.unwrap_or(50),
+        request.max_turns,
     )
 }
 
@@ -99,7 +99,7 @@ pub fn migrate(request: MigrateRequest) -> Result<MigrateResult, String> {
     let context = claud_extractor::extract_context(
         &request.project_path,
         request.session_id.as_deref(),
-        request.max_turns.unwrap_or(50),
+        request.max_turns,
     )?;
 
     let result = codex_injector::do_migrate(
@@ -123,7 +123,7 @@ pub fn copy_prompt(request: CopyPromptRequest) -> Result<serde_json::Value, Stri
     let context = claud_extractor::extract_context(
         &request.project_path,
         request.session_id.as_deref(),
-        request.max_turns.unwrap_or(50),
+        request.max_turns,
     )?;
 
     let prompt = codex_injector::copy_prompt(&context, 800)?;
@@ -150,7 +150,7 @@ pub fn export_context(request: ExportRequest) -> Result<ExportResult, String> {
     let context = claud_extractor::extract_context(
         &request.project_path,
         request.session_id.as_deref(),
-        request.max_turns.unwrap_or(50),
+        request.max_turns,
     )?;
 
     let md = crate::context_formatter::format_as_markdown(
