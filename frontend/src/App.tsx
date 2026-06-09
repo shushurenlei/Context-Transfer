@@ -92,7 +92,7 @@ export default function App() {
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-6">
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-500/50 text-red-300 text-sm">
+          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-300 text-red-700 text-sm">
             {error}
           </div>
         )}

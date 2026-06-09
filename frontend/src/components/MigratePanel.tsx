@@ -158,8 +158,8 @@ export default function MigratePanel({ projectPath, sessionId, onComplete: _onCo
         {result && (
           <div className={`p-3 rounded-lg text-sm ${
             result.success
-              ? 'bg-green-900/30 border border-green-500/50 text-green-300'
-              : 'bg-red-900/30 border border-red-500/50 text-red-300'
+              ? 'bg-green-50 border border-green-300 text-green-700'
+              : 'bg-red-50 border border-red-300 text-red-700'
           }`}>
             {result.message}
           </div>
