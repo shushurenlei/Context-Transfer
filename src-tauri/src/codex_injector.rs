@@ -92,25 +92,26 @@ pub fn cleanup_agents_md(project_path: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-/// 启动 Codex CLI（通过 login shell 确保能找到 homebrew 安装的命令）
+/// 在新终端窗口中启动 Codex CLI
 pub fn launch_codex(project_path: &str, model: Option<&str>) -> Result<u32, String> {
-    let codex_args = match model {
-        Some(m) => format!("codex --model {}", shell_escape(m)),
+    let codex_cmd = match model {
+        Some(m) => format!("codex --model '{}'", m.replace('\'', "'\\''")),
         None => "codex".to_string(),
     };
 
-    let child = Command::new("/bin/zsh")
-        .args(["-l", "-c", &codex_args])
-        .current_dir(project_path)
+    // 拼接 shell 命令：先 cd 到项目目录，再 source ~/.zshrc 确保 PATH，最后启动 codex
+    let script = format!(
+        "tell app \"Terminal\" to do script \"cd '{}' && source ~/.zshrc 2>/dev/null; {}\"",
+        project_path.replace('\'', "'\\''"),
+        codex_cmd,
+    );
+
+    let child = Command::new("osascript")
+        .args(["-e", &script])
         .spawn()
-        .map_err(|e| format!("启动 Codex 失败: {}", e))?;
+        .map_err(|e| format!("启动终端 Codex 失败: {}", e))?;
 
     Ok(child.id())
-}
-
-/// 简单 shell 参数转义，防止命令注入
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 /// 执行迁移操作
