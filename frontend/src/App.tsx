@@ -18,15 +18,19 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [knownProjects, setKnownProjects] = useState<ProjectEntry[]>([])
 
-  // 自动检测项目路径 + 加载已知项目
+  // 加载已知项目
   useEffect(() => {
-    api.detectProject()
-      .then(setProjectPath)
-      .catch(() => setProjectPath('/'))
     api.listProjects()
       .then(setKnownProjects)
       .catch(() => {})
   }, [])
+
+  // Codex 方向时自动加载会话（无需项目路径）
+  useEffect(() => {
+    if (direction === 'codex-to-claude' && !projectPath) {
+      loadSessions('', direction)
+    }
+  }, [direction])
 
   // 加载会话列表
   const loadSessions = useCallback(async (path: string, dir: Direction) => {
@@ -43,7 +47,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (projectPath) loadSessions(projectPath, direction)
+    if (projectPath && direction === 'claude-to-codex') loadSessions(projectPath, direction)
   }, [projectPath, direction, loadSessions])
 
   // 切换方向
