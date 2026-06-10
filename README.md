@@ -13,16 +13,11 @@
 
 ---
 
-在多个 AI 编码助手之间切换时，对话上下文会丢失。Context Transfer 提供原生桌面界面，在以下工具之间**一键迁移会话上下文**：
+在 AI 编码助手之间切换时，对话上下文会丢失。Context Transfer 提供原生桌面界面，支持以下工具之间**一键迁移会话上下文**：
 
 <p align="center">
-  <strong>Claude Code</strong> &nbsp;|&nbsp;
-  <strong>Codex CLI</strong> &nbsp;|&nbsp;
-  <strong>Claude Desktop</strong> &nbsp;|&nbsp;
-  <strong>Gemini CLI</strong> &nbsp;|&nbsp;
-  <strong>OpenCode</strong> &nbsp;|&nbsp;
-  <strong>OpenClaw</strong> &nbsp;|&nbsp;
-  <strong>Hermes Agent</strong>
+  <strong>Claude Code</strong> &nbsp;↔&nbsp;
+  <strong>Codex CLI</strong>
 </p>
 
 ## 📥 下载
@@ -45,9 +40,9 @@
 
 | 方向 | 源 → 目标 | 状态 |
 |------|-----------|------|
-| 正向 | Claude Code → Codex CLI | ✅ 已支持 |
-| 反向 | Codex CLI → Claude Code | ✅ 已支持 |
-| 扩展 | 更多 AI 工具 | 🚧 开发中 |
+| 正向 | Claude Code → Codex CLI | ✅ |
+| 反向 | Codex CLI → Claude Code | ✅ |
+| 扩展 | 更多 AI 工具（Claude Desktop, Gemini CLI, OpenCode ...） | 🚧 规划中 |
 
 ### 三种注入方式
 
