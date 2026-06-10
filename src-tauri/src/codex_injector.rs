@@ -6,6 +6,87 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+const MIGRATION_START_MARKER: &str = "<!-- context-transfer:begin -->";
+const MIGRATION_END_MARKER: &str = "<!-- context-transfer:end -->";
+const MIGRATION_HEADING: &str = "# 会话上下文迁移";
+const LEGACY_MIGRATION_HEADINGS: [&str; 3] = [
+    MIGRATION_HEADING,
+    "# Claude Code 会话上下文迁移",
+    "# Codex 会话上下文迁移",
+];
+
+fn wrap_migration_block(context_md: &str) -> String {
+    format!(
+        "{}\n{}\n{}",
+        MIGRATION_START_MARKER,
+        context_md.trim_end(),
+        MIGRATION_END_MARKER
+    )
+}
+
+fn separator_start_before(content: &str, marker_idx: usize) -> usize {
+    let prefix = &content[..marker_idx];
+    let trimmed = prefix.trim_end();
+
+    if trimmed.ends_with("---") {
+        trimmed.rfind("---").unwrap_or(marker_idx)
+    } else {
+        marker_idx
+    }
+}
+
+fn join_after_removal(prefix: &str, suffix: &str) -> String {
+    let prefix = prefix.trim_end();
+    let suffix = suffix.trim_start();
+
+    match (prefix.is_empty(), suffix.is_empty()) {
+        (true, true) => String::new(),
+        (true, false) => suffix.to_string(),
+        (false, true) => prefix.to_string(),
+        (false, false) => format!("{}\n\n{}", prefix, suffix),
+    }
+}
+
+fn remove_marked_migration_blocks(content: &str) -> (String, bool) {
+    let mut cleaned = content.to_string();
+    let mut removed = false;
+
+    while let Some(start) = cleaned.find(MIGRATION_START_MARKER) {
+        let search_from = start + MIGRATION_START_MARKER.len();
+        let end = cleaned[search_from..]
+            .find(MIGRATION_END_MARKER)
+            .map(|idx| search_from + idx + MIGRATION_END_MARKER.len())
+            .unwrap_or(cleaned.len());
+        let removal_start = separator_start_before(&cleaned, start);
+        cleaned = join_after_removal(&cleaned[..removal_start], &cleaned[end..]);
+        removed = true;
+    }
+
+    (cleaned, removed)
+}
+
+fn remove_legacy_migration_block(content: &str) -> (String, bool) {
+    let legacy_idx = LEGACY_MIGRATION_HEADINGS
+        .iter()
+        .filter_map(|heading| content.find(heading))
+        .min();
+
+    match legacy_idx {
+        Some(idx) => {
+            let removal_start = separator_start_before(content, idx);
+            (content[..removal_start].trim_end().to_string(), true)
+        }
+        None => (content.to_string(), false),
+    }
+}
+
+fn remove_existing_migration_blocks(content: &str) -> (String, bool) {
+    let (without_marked, removed_marked) = remove_marked_migration_blocks(content);
+    let (without_legacy, removed_legacy) = remove_legacy_migration_block(&without_marked);
+
+    (without_legacy, removed_marked || removed_legacy)
+}
+
 /// 通用终端启动脚本生成
 fn terminal_script(shell_cmd: &str) -> String {
     format!(
@@ -65,25 +146,18 @@ pub fn inject_via_agents_md(
             .map_err(|e| format!("读取 AGENTS.md 失败: {}", e))?;
 
         if cleanup {
-            // 清理之前的迁移段
-            if let Some(idx) = existing.find("# Claude Code 会话上下文迁移") {
-                if let Some(sep_idx) = existing[..idx].rfind("---") {
-                    existing = existing[..sep_idx].trim_end().to_string();
-                } else {
-                    existing = existing[..idx].trim_end().to_string();
-                }
-            }
+            existing = remove_existing_migration_blocks(&existing).0;
         }
     }
 
+    let migration_block = wrap_migration_block(context_md);
     let combined = if !existing.trim().is_empty() {
-        format!("{}\n\n---\n\n{}", existing.trim_end(), context_md)
+        format!("{}\n\n---\n\n{}", existing.trim_end(), migration_block)
     } else {
-        context_md.to_string()
+        migration_block
     };
 
-    fs::write(&agents_md_path, combined)
-        .map_err(|e| format!("写入 AGENTS.md 失败: {}", e))?;
+    fs::write(&agents_md_path, combined).map_err(|e| format!("写入 AGENTS.md 失败: {}", e))?;
 
     Ok(agents_md_path.to_string_lossy().to_string())
 }
@@ -95,26 +169,16 @@ pub fn cleanup_agents_md(project_path: &str) -> Result<bool, String> {
         return Ok(false);
     }
 
-    let content = fs::read_to_string(&agents_md_path)
-        .map_err(|e| format!("读取 AGENTS.md 失败: {}", e))?;
+    let content =
+        fs::read_to_string(&agents_md_path).map_err(|e| format!("读取 AGENTS.md 失败: {}", e))?;
 
-    if !content.contains("# Claude Code 会话上下文迁移") {
+    let (cleaned, removed) = remove_existing_migration_blocks(&content);
+    if !removed {
         return Ok(false);
     }
 
-    if let Some(idx) = content.find("# Claude Code 会话上下文迁移") {
-        let cleaned = if let Some(sep_idx) = content[..idx].rfind("---") {
-            format!("{}\n", content[..sep_idx].trim_end())
-        } else {
-            format!("{}\n", content[..idx].trim_end())
-        };
-
-        fs::write(&agents_md_path, cleaned)
-            .map_err(|e| format!("写入 AGENTS.md 失败: {}", e))?;
-        return Ok(true);
-    }
-
-    Ok(false)
+    fs::write(&agents_md_path, cleaned).map_err(|e| format!("写入 AGENTS.md 失败: {}", e))?;
+    Ok(true)
 }
 
 /// 通过写入项目 CLAUDE.md 注入上下文（给 Claude Code 使用）
@@ -124,7 +188,6 @@ pub fn inject_via_claude_md(
     cleanup: bool,
 ) -> Result<String, String> {
     let md_path = Path::new(project_path).join("CLAUDE.md");
-    let marker = "# Codex 会话上下文迁移";
 
     let mut existing = String::new();
     if md_path.exists() {
@@ -132,20 +195,15 @@ pub fn inject_via_claude_md(
             fs::read_to_string(&md_path).map_err(|e| format!("读取 CLAUDE.md 失败: {}", e))?;
 
         if cleanup {
-            if let Some(idx) = existing.find(marker) {
-                if let Some(sep_idx) = existing[..idx].rfind("---") {
-                    existing = existing[..sep_idx].trim_end().to_string();
-                } else {
-                    existing = existing[..idx].trim_end().to_string();
-                }
-            }
+            existing = remove_existing_migration_blocks(&existing).0;
         }
     }
 
+    let migration_block = wrap_migration_block(context_md);
     let combined = if !existing.trim().is_empty() {
-        format!("{}\n\n---\n\n{}", existing.trim_end(), context_md)
+        format!("{}\n\n---\n\n{}", existing.trim_end(), migration_block)
     } else {
-        context_md.to_string()
+        migration_block
     };
 
     fs::write(&md_path, combined).map_err(|e| format!("写入 CLAUDE.md 失败: {}", e))?;
@@ -162,24 +220,14 @@ pub fn cleanup_claude_md(project_path: &str) -> Result<bool, String> {
 
     let content =
         fs::read_to_string(&md_path).map_err(|e| format!("读取 CLAUDE.md 失败: {}", e))?;
-    let marker = "# Codex 会话上下文迁移";
 
-    if !content.contains(marker) {
+    let (cleaned, removed) = remove_existing_migration_blocks(&content);
+    if !removed {
         return Ok(false);
     }
 
-    if let Some(idx) = content.find(marker) {
-        let cleaned = if let Some(sep_idx) = content[..idx].rfind("---") {
-            format!("{}\n", content[..sep_idx].trim_end())
-        } else {
-            format!("{}\n", content[..idx].trim_end())
-        };
-
-        fs::write(&md_path, cleaned).map_err(|e| format!("写入 CLAUDE.md 失败: {}", e))?;
-        return Ok(true);
-    }
-
-    Ok(false)
+    fs::write(&md_path, cleaned).map_err(|e| format!("写入 CLAUDE.md 失败: {}", e))?;
+    Ok(true)
 }
 
 /// 在新终端窗口中启动 Codex CLI
@@ -228,9 +276,14 @@ pub fn do_migrate(
 
     match mode {
         "prompt" => {
-            let prompt = context_formatter::format_as_prompt(context, max_content_length, max_total_length);
+            let prompt =
+                context_formatter::format_as_prompt(context, max_content_length, max_total_length);
             copy_to_clipboard(&prompt)?;
-            let target = if is_codex_to_claude { "Claude Code" } else { "Codex" };
+            let target = if is_codex_to_claude {
+                "Claude Code"
+            } else {
+                "Codex"
+            };
             Ok(MigrateResult {
                 success: true,
                 message: format!("📋 上下文已复制到剪贴板，在 {} 中粘贴即可", target),
@@ -238,7 +291,11 @@ pub fn do_migrate(
             })
         }
         "agents-md" => {
-            let md = context_formatter::format_as_markdown(context, max_content_length, max_total_length);
+            let md = context_formatter::format_as_markdown(
+                context,
+                max_content_length,
+                max_total_length,
+            );
             let filepath = if is_codex_to_claude {
                 inject_via_claude_md(&md, project_path, true)?
             } else {
@@ -251,7 +308,11 @@ pub fn do_migrate(
             })
         }
         "auto" => {
-            let md = context_formatter::format_as_markdown(context, max_content_length, max_total_length);
+            let md = context_formatter::format_as_markdown(
+                context,
+                max_content_length,
+                max_total_length,
+            );
             let filepath = if is_codex_to_claude {
                 inject_via_claude_md(&md, project_path, true)?
             } else {
@@ -262,10 +323,17 @@ pub fn do_migrate(
             } else {
                 launch_codex(project_path, model)?
             };
-            let app = if is_codex_to_claude { "Claude Code" } else { "Codex" };
+            let app = if is_codex_to_claude {
+                "Claude Code"
+            } else {
+                "Codex"
+            };
             Ok(MigrateResult {
                 success: true,
-                message: format!("📝 上下文已写入 {}，{} 已启动 (PID: {})", filepath, app, pid),
+                message: format!(
+                    "📝 上下文已写入 {}，{} 已启动 (PID: {})",
+                    filepath, app, pid
+                ),
                 filepath: Some(filepath),
             })
         }
@@ -282,4 +350,89 @@ pub fn copy_prompt(
     let prompt = context_formatter::format_as_prompt(context, max_content_length, max_total_length);
     copy_to_clipboard(&prompt)?;
     Ok(prompt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_project_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("context_transfer_test_{}", nanos));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn cleanup_dir(path: &Path) {
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn inject_agents_md_replaces_legacy_block_instead_of_appending() {
+        let dir = temp_project_dir();
+        let agents_path = dir.join("AGENTS.md");
+        fs::write(
+            &agents_path,
+            "# 项目规则\n\n保留内容\n\n---\n\n# 会话上下文迁移\nold block",
+        )
+        .unwrap();
+
+        inject_via_agents_md("# 会话上下文迁移\nnew block", dir.to_str().unwrap(), true).unwrap();
+
+        let content = fs::read_to_string(&agents_path).unwrap();
+        assert!(content.contains("# 项目规则"));
+        assert!(content.contains("new block"));
+        assert!(!content.contains("old block"));
+        assert!(content.contains(MIGRATION_START_MARKER));
+        assert!(content.contains(MIGRATION_END_MARKER));
+        assert_eq!(content.matches(MIGRATION_HEADING).count(), 1);
+
+        cleanup_dir(&dir);
+    }
+
+    #[test]
+    fn cleanup_agents_md_removes_marked_block() {
+        let dir = temp_project_dir();
+        let agents_path = dir.join("AGENTS.md");
+        fs::write(
+            &agents_path,
+            format!(
+                "# 项目规则\n\n保留内容\n\n---\n\n{}\n# 会话上下文迁移\nold block\n{}",
+                MIGRATION_START_MARKER, MIGRATION_END_MARKER
+            ),
+        )
+        .unwrap();
+
+        let cleaned = cleanup_agents_md(dir.to_str().unwrap()).unwrap();
+
+        let content = fs::read_to_string(&agents_path).unwrap();
+        assert!(cleaned);
+        assert_eq!(content.trim_end(), "# 项目规则\n\n保留内容");
+
+        cleanup_dir(&dir);
+    }
+
+    #[test]
+    fn cleanup_claude_md_removes_legacy_codex_heading_block() {
+        let dir = temp_project_dir();
+        let claude_path = dir.join("CLAUDE.md");
+        fs::write(
+            &claude_path,
+            "# Claude 规则\n\n---\n\n# Codex 会话上下文迁移\nold block",
+        )
+        .unwrap();
+
+        let cleaned = cleanup_claude_md(dir.to_str().unwrap()).unwrap();
+
+        let content = fs::read_to_string(&claude_path).unwrap();
+        assert!(cleaned);
+        assert_eq!(content.trim_end(), "# Claude 规则");
+
+        cleanup_dir(&dir);
+    }
 }
