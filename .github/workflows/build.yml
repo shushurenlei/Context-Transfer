@@ -1,0 +1,38 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust (check-only on non-macOS)
+        if: matrix.os != 'macos-latest'
+        run: cd src-tauri && cargo check
+
+      - name: Build Rust (full build on macOS)
+        if: matrix.os == 'macos-latest'
+        run: cd src-tauri && cargo build --release
+
+      - name: Run tests
+        run: cd src-tauri && cargo test

@@ -16,6 +16,7 @@ dirs = "6"
 chrono = "0.4"
 uuid = { version = "1", features = ["v4"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
+arboard = "3"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

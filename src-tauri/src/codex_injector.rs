@@ -87,48 +87,92 @@ fn remove_existing_migration_blocks(content: &str) -> (String, bool) {
     (without_legacy, removed_marked || removed_legacy)
 }
 
-/// 通用终端启动脚本生成
-fn terminal_script(shell_cmd: &str) -> String {
-    format!(
-        "tell app \"Terminal\"\n\
-         \x20 if (count of windows) = 0 then\n\
-         \x20 \x20 do script \"{0}\"\n\
-         \x20 else\n\
-         \x20 \x20 do script \"{0}\" in front window\n\
-         \x20 end if\n\
-         \x20 activate\n\
-         end tell",
-        shell_cmd.replace('\"', "\\\"")
-    )
-}
-
-/// 通过 osascript 在新终端窗口中执行命令
-fn launch_in_terminal(shell_cmd: &str) -> Result<u32, String> {
-    let script = terminal_script(shell_cmd);
-    let child = Command::new("osascript")
-        .args(["-e", &script])
-        .spawn()
-        .map_err(|e| format!("启动终端失败: {}", e))?;
-    Ok(child.id())
-}
-
-/// 通过 pbcopy 复制文本到系统剪贴板 (macOS)
-pub fn copy_to_clipboard(text: &str) -> Result<(), String> {
-    let mut child = Command::new("pbcopy")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("启动 pbcopy 失败: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        use std::io::Write;
-        stdin
-            .write_all(text.as_bytes())
-            .map_err(|e| format!("写入剪贴板失败: {}", e))?;
+/// 构建跨平台 shell 命令
+fn build_shell_cmd(project_path: &str, cli_cmd: &str) -> String {
+    #[cfg(target_os = "macos")]
+    {
+        format!(
+            "cd '{}' && source ~/.zshrc 2>/dev/null; {}",
+            project_path.replace('\'', "'\\''"),
+            cli_cmd,
+        )
     }
+    #[cfg(target_os = "windows")]
+    {
+        format!(
+            "cd /d \"{}\" && {}",
+            project_path.replace('\"', "\\\""),
+            cli_cmd,
+        )
+    }
+    #[cfg(target_os = "linux")]
+    {
+        format!(
+            "cd '{}' && [ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null; {}",
+            project_path.replace('\'', "'\\''"),
+            cli_cmd,
+        )
+    }
+}
 
-    child
-        .wait()
-        .map_err(|e| format!("等待 pbcopy 失败: {}", e))?;
+/// 在新终端窗口中执行命令（跨平台）
+fn launch_in_terminal(shell_cmd: &str) -> Result<u32, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell app \"Terminal\"\n\
+             \x20 if (count of windows) = 0 then\n\
+             \x20 \x20 do script \"{0}\"\n\
+             \x20 else\n\
+             \x20 \x20 do script \"{0}\" in front window\n\
+             \x20 end if\n\
+             \x20 activate\n\
+             end tell",
+            shell_cmd.replace('\"', "\\\"")
+        );
+        let child = Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| format!("启动终端失败: {}", e))?;
+        Ok(child.id())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let child = Command::new("cmd")
+            .args(["/c", "start", "Context Transfer", "cmd", "/k", shell_cmd])
+            .spawn()
+            .map_err(|e| format!("启动终端失败: {}", e))?;
+        Ok(child.id())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let terminals = [
+            "x-terminal-emulator",
+            "gnome-terminal",
+            "konsole",
+            "xfce4-terminal",
+        ];
+        for term in &terminals {
+            let args: &[&str] = if *term == "gnome-terminal" {
+                &["--", "bash", "-c", shell_cmd]
+            } else {
+                &["-e", shell_cmd]
+            };
+            if let Ok(child) = Command::new(term).args(args).spawn() {
+                return Ok(child.id());
+            }
+        }
+        Err("未找到可用的终端模拟器".to_string())
+    }
+}
+
+/// 通过 arboard 复制文本到系统剪贴板（跨平台）
+pub fn copy_to_clipboard(text: &str) -> Result<(), String> {
+    let mut clipboard = arboard::Clipboard::new()
+        .map_err(|e| format!("打开剪贴板失败: {}", e))?;
+    clipboard
+        .set_text(text)
+        .map_err(|e| format!("写入剪贴板失败: {}", e))?;
     Ok(())
 }
 
@@ -237,22 +281,13 @@ pub fn launch_codex(project_path: &str, model: Option<&str>) -> Result<u32, Stri
         None => "codex".to_string(),
     };
 
-    let shell_cmd = format!(
-        "cd '{}' && source ~/.zshrc 2>/dev/null; {}",
-        project_path.replace('\'', "'\\''"),
-        codex_cmd,
-    );
-
+    let shell_cmd = build_shell_cmd(project_path, &codex_cmd);
     launch_in_terminal(&shell_cmd)
 }
 
 /// 在新终端窗口中启动 Claude Code
 pub fn launch_claude(project_path: &str) -> Result<u32, String> {
-    let shell_cmd = format!(
-        "cd '{}' && source ~/.zshrc 2>/dev/null; claude",
-        project_path.replace('\'', "'\\''"),
-    );
-
+    let shell_cmd = build_shell_cmd(project_path, "claude");
     launch_in_terminal(&shell_cmd)
 }
 

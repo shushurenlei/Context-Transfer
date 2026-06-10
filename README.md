@@ -4,7 +4,7 @@
 
   <p>
     <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-blue" />
-    <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-lightgrey" />
+    <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" />
     <img alt="Built with" src="https://img.shields.io/badge/built%20with-Tauri%202-6366f1" />
     <img alt="Downloads" src="https://img.shields.io/github/downloads/shushurenlei/Context-Transfer/total?color=green" />
     <img alt="License" src="https://img.shields.io/badge/license-MIT-brightgreen" />
@@ -22,19 +22,15 @@
 
 ## 📥 下载
 
-> 目前仅支持 **macOS**（Apple Silicon）。
+支持 **macOS**、**Windows** 和 **Linux**。
 
 前往 [Releases](https://github.com/shushurenlei/Context-Transfer/releases) 页面下载最新版本：
 
-| 文件 | 说明 |
+| 文件 | 平台 |
 |------|------|
-| `Context Transfer_0.1.0_aarch64.dmg` | macOS DMG 安装包 |
-| `Context Transfer.app` | macOS 应用包（含在 DMG 中） |
-
-```bash
-# 或通过 Homebrew 安装（即将支持）
-# brew install context-transfer
-```
+| `Context Transfer_0.1.0_aarch64.dmg` | macOS (Apple Silicon) |
+| `Context Transfer_0.1.0_x64.msi` | Windows (x64) |
+| `Context Transfer_0.1.0_amd64.deb` | Linux (Debian/Ubuntu) |
 
 ## ✨ 功能特性
 
@@ -76,7 +72,9 @@
 
 - [Rust](https://www.rust-lang.org/tools/install) ≥ 1.77
 - [Node.js](https://nodejs.org/) ≥ 20
-- macOS + Xcode Command Line Tools
+- **macOS**: Xcode Command Line Tools
+- **Windows**: Visual Studio Build Tools（含 C++ 工作负载）
+- **Linux**: `libwebkit2gtk-4.1-dev` 等 Tauri 系统依赖
 
 ### 构建
 
