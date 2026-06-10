@@ -1,106 +1,114 @@
-# Context Transfer
+<div align="center">
+  <h1>🔄 Context Transfer</h1>
+  <p><strong>AI 编码助手上下文迁移工具</strong></p>
 
-🔄 Claude Code ↔ Codex CLI 双向上下文迁移工具（Tauri 桌面应用）
+  <p>
+    <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-blue" />
+    <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-lightgrey" />
+    <img alt="Built with" src="https://img.shields.io/badge/built%20with-Tauri%202-6366f1" />
+    <img alt="Downloads" src="https://img.shields.io/github/downloads/shushurenlei/Context-Transfer/total?color=green" />
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-brightgreen" />
+  </p>
+</div>
 
-在 [Claude Code](https://claude.ai/code) 和 [Codex CLI](https://github.com/anthropics/codex) 之间切换时，对话上下文会丢失。Context Transfer 提供原生桌面界面，支持双向一键迁移会话上下文。
+---
 
-## 功能特性
+在多个 AI 编码助手之间切换时，对话上下文会丢失。Context Transfer 提供原生桌面界面，在以下工具之间**一键迁移会话上下文**：
 
-- 🔍 **自动检测** Claude Code 项目
-- 📋 **会话列表** 浏览所有历史会话，按时间排序
-- 👁️ **上下文预览** 迁移前预览对话内容
-- 🚀 **一键迁移** 支持三种注入方式：
-  - **Prompt 模式** — 生成 Prompt 文本，复制到剪贴板
-  - **AGENTS.md 模式** — 写入项目 AGENTS.md，Codex 自动读取
-  - **自动模式** — 写入 AGENTS.md 并启动 Codex
-- 🧹 **清理** 一键清除 AGENTS.md 中的迁移内容
-- 💾 **导出** 将上下文导出为 Markdown 文件
+<p align="center">
+  <strong>Claude Code</strong> &nbsp;|&nbsp;
+  <strong>Codex CLI</strong> &nbsp;|&nbsp;
+  <strong>Claude Desktop</strong> &nbsp;|&nbsp;
+  <strong>Gemini CLI</strong> &nbsp;|&nbsp;
+  <strong>OpenCode</strong> &nbsp;|&nbsp;
+  <strong>OpenClaw</strong> &nbsp;|&nbsp;
+  <strong>Hermes Agent</strong>
+</p>
 
-## 技术栈
+## 📥 下载
 
-| 层 | 技术 |
-|---|------|
-| 桌面框架 | [Tauri 2](https://v2.tauri.app/) |
-| 后端 | Rust |
-| 前端 | React 19 + TypeScript |
-| 样式 | Tailwind CSS |
-| 构建 | Vite |
+> 目前仅支持 **macOS**（Apple Silicon）。
 
-## 从源码构建
+前往 [Releases](https://github.com/shushurenlei/Context-Transfer/releases) 页面下载最新版本：
+
+| 文件 | 说明 |
+|------|------|
+| `Context Transfer_0.1.0_aarch64.dmg` | macOS DMG 安装包 |
+| `Context Transfer.app` | macOS 应用包（含在 DMG 中） |
+
+```bash
+# 或通过 Homebrew 安装（即将支持）
+# brew install context-transfer
+```
+
+## ✨ 功能特性
+
+| 方向 | 源 → 目标 | 状态 |
+|------|-----------|------|
+| 正向 | Claude Code → Codex CLI | ✅ 已支持 |
+| 反向 | Codex CLI → Claude Code | ✅ 已支持 |
+| 扩展 | 更多 AI 工具 | 🚧 开发中 |
+
+### 三种注入方式
+
+| 方式 | 原理 | 适用场景 |
+|------|------|---------|
+| **Prompt 模式** | 生成上下文文本复制到剪贴板 | 临时切换，手动粘贴 |
+| **文件写入模式** | 将上下文写入项目配置文件，目标工具启动时自动读取 | 项目内长期使用 |
+| **一键自动模式** | 写入配置文件 + 启动目标工具 | 无缝切换 |
+
+### 其他功能
+
+- 🔍 自动扫描已安装 AI 工具的项目历史
+- 📋 会话列表按时间排序，一键选择最新
+- 👁️ 迁移前预览上下文内容
+- 🧹 一键清理迁移写入的内容
+- 💾 导出上下文为 Markdown 文件
+
+## 🛠 技术栈
+
+<p>
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white" />
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" />
+  <img alt="Tailwind" src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white" />
+</p>
+
+## 🔧 从源码构建
 
 ### 前置要求
 
-- [Rust](https://www.rust-lang.org/tools/install) (≥ 1.77)
-- [Node.js](https://nodejs.org/) (≥ 20)
-- macOS 需安装 Xcode Command Line Tools
+- [Rust](https://www.rust-lang.org/tools/install) ≥ 1.77
+- [Node.js](https://nodejs.org/) ≥ 20
+- macOS + Xcode Command Line Tools
 
-### 构建步骤
+### 构建
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/your-username/context-reset.git
-cd context-reset
+git clone https://github.com/shushurenlei/Context-Transfer.git
+cd Context-Transfer
 
-# 2. 安装前端依赖
-cd frontend
-npm install
-cd ..
+# 安装前端依赖
+cd frontend && npm install && cd ..
 
-# 3. 安装 Tauri CLI
+# 安装 Tauri CLI
 cargo install tauri-cli --version "^2"
 
-# 4. 构建前端
+# 构建
 cd frontend && npm run build && cd ..
-
-# 5. 构建桌面应用
-cd src-tauri
-cargo tauri build
+cd src-tauri && cargo tauri build
 ```
 
-构建产物：
+产物位于 `src-tauri/target/release/bundle/`。
 
-- `src-tauri/target/release/bundle/macos/Context Reset.app` — macOS 应用
-- `src-tauri/target/release/bundle/dmg/Context Reset_*.dmg` — DMG 安装包
-
-### 开发模式
+### 开发
 
 ```bash
-# 启动开发服务器（前端热更新）
-cd frontend && npm run dev
-
-# 在另一个终端启动 Tauri 开发模式
-cd src-tauri && cargo tauri dev
+cd frontend && npm run dev     # 终端 1：Vite 开发服务器
+cd src-tauri && cargo tauri dev # 终端 2：Tauri 热重载
 ```
 
-## 项目结构
+## 📄 License
 
-```
-context_reset/
-├── frontend/          # React + TypeScript 前端
-│   ├── src/
-│   │   ├── api/       # Tauri invoke 封装
-│   │   ├── components/
-│   │   │   ├── Header.tsx
-│   │   │   ├── SessionList.tsx
-│   │   │   ├── ContextPreview.tsx
-│   │   │   └── MigratePanel.tsx
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   └── package.json
-├── src-tauri/         # Rust + Tauri 后端
-│   ├── src/
-│   │   ├── main.rs              # 入口
-│   │   ├── lib.rs               # Tauri Builder 配置
-│   │   ├── commands.rs          # Tauri 命令
-│   │   ├── claud_extractor.rs   # Claude Code 会话解析
-│   │   ├── context_formatter.rs # 上下文格式化
-│   │   └── codex_injector.rs   # Codex 注入器
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-├── AGENTS.md
-└── README.md
-```
-
-## License
-
-MIT
+[MIT](LICENSE)
