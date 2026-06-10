@@ -122,7 +122,10 @@ pub fn extract_context(
     let merged = merge_consecutive(messages);
 
     let limited = match max_turns {
-        Some(limit) => merged.into_iter().take(limit).collect(),
+        Some(limit) => {
+            let total = merged.len();
+            merged.into_iter().skip(total.saturating_sub(limit)).collect()
+        }
         None => merged,
     };
 

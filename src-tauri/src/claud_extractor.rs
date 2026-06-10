@@ -275,7 +275,10 @@ pub fn parse_session(jsonl_path: &Path, max_turns: Option<usize>) -> Result<Vec<
     }
 
     match max_turns {
-        Some(limit) => Ok(merged.into_iter().take(limit).collect()),
+        Some(limit) => {
+            let total = merged.len();
+            Ok(merged.into_iter().skip(total.saturating_sub(limit)).collect())
+        }
         None => Ok(merged),
     }
 }

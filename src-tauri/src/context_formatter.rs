@@ -23,31 +23,22 @@ pub fn format_as_markdown(
     max_total_length: Option<usize>,
 ) -> String {
     let mut lines = Vec::new();
-    let mut total = 0usize;
 
-    macro_rules! push_line {
-        ($s:expr) => {
-            let s: String = $s;
-            total += s.len() + 1;
-            lines.push(s);
-        };
-    }
-
-    push_line!(format!("# 会话上下文迁移"));
-    push_line!(String::new());
-    push_line!(format!(
+    lines.push(format!("# 会话上下文迁移"));
+    lines.push(String::new());
+    lines.push(format!(
         "> 从会话 `{}...` 迁移",
         truncate(&context.session_id, 16)
     ));
-    push_line!(format!("> 项目路径: `{}`", context.project_path));
+    lines.push(format!("> 项目路径: `{}`", context.project_path));
     if let Some(ref branch) = context.git_branch {
-        push_line!(format!("> Git 分支: `{}`", branch));
+        lines.push(format!("> Git 分支: `{}`", branch));
     }
-    push_line!(format!(
+    lines.push(format!(
         "> 迁移时间: {}",
         chrono::Local::now().format("%Y-%m-%d %H:%M")
     ));
-    push_line!(String::new());
+    lines.push(String::new());
 
     // 统计
     let user_questions: Vec<_> = context
@@ -56,26 +47,26 @@ pub fn format_as_markdown(
         .filter(|m| m.role == "user" && !m.content.starts_with("↩"))
         .collect();
 
-    push_line!(format!("## 上下文摘要"));
-    push_line!(String::new());
-    push_line!(format!("- 用户主动提问 {} 次", user_questions.len()));
-    push_line!(format!("- 对话轮次共 {} 条", context.messages.len()));
+    lines.push(format!("## 上下文摘要"));
+    lines.push(String::new());
+    lines.push(format!("- 用户主动提问 {} 次", user_questions.len()));
+    lines.push(format!("- 对话轮次共 {} 条", context.messages.len()));
     if !user_questions.is_empty() {
-        push_line!(String::new());
-        push_line!(format!(
+        lines.push(String::new());
+        lines.push(format!(
             "核心问题: {}",
             truncate(&user_questions[0].content, 200)
         ));
     }
-    push_line!(String::new());
+    lines.push(String::new());
 
-    // 对话历史 — 如果超长则从最早的开始丢弃
-    push_line!(format!("## 对话历史"));
-    push_line!(String::new());
+    // 对话历史
+    lines.push(format!("## 对话历史"));
+    lines.push(String::new());
 
-    let limit = max_total_length.unwrap_or(usize::MAX);
+    // 先构建所有消息块
+    let mut blocks: Vec<Vec<String>> = Vec::new();
     let mut turn_num = 0usize;
-    let mut trimmed = false;
 
     for msg in &context.messages {
         let content = if msg.content.chars().count() > max_content_length {
@@ -102,21 +93,31 @@ pub fn format_as_markdown(
             block.push(content);
             block.push(String::new());
         }
+        blocks.push(block);
+    }
 
+    // 从头部计算累计长度，若超限则跳过早期块，保留较近的
+    let header_len: usize = lines.iter().map(|s| s.len() + 1).sum();
+    let mut total = header_len;
+    let limit = max_total_length.unwrap_or(usize::MAX);
+    let mut skipped = 0usize;
+
+    for (i, block) in blocks.iter().enumerate() {
         let block_len: usize = block.iter().map(|s| s.len() + 1).sum();
-        if total + block_len > limit && turn_num > 2 {
-            trimmed = true;
-            break;
-        }
-        for s in block {
-            push_line!(s);
+        if total + block_len > limit && i < blocks.len().saturating_sub(2) {
+            skipped += 1;
+        } else {
+            for s in block {
+                lines.push(s.clone());
+            }
+            total += block_len;
         }
     }
 
-    if trimmed {
-        push_line!(format!(
-            "> ⚠️ 上下文已达长度上限（{} 字符），较早期的对话已省略。",
-            limit
+    if skipped > 0 {
+        lines.push(format!(
+            "> ⚠️ 上下文已达长度上限（{} 字符），较早期的 {} 条对话已省略",
+            limit, skipped
         ));
     }
 
@@ -160,10 +161,10 @@ pub fn format_as_prompt(
         push_line!(String::new());
     }
 
-    // 对话摘要（从新到旧，重要消息在前）
+    // 对话摘要 — 先收集再从尾部（最新）开始保留
     push_line!(format!("【对话摘要】"));
+    let mut all_turns: Vec<String> = Vec::new();
     let mut turn = 0usize;
-    let mut trimmed = false;
 
     for msg in &context.messages {
         let is_tool_result = msg.content.starts_with("↩");
@@ -180,18 +181,23 @@ pub fn format_as_prompt(
         } else {
             continue;
         };
-
-        if total + line.len() + 1 > limit && turn > 2 {
-            trimmed = true;
-            break;
-        }
-        push_line!(line);
+        all_turns.push(line);
     }
 
-    if trimmed {
+    let mut skipped = 0usize;
+    for (i, line) in all_turns.iter().enumerate() {
+        let line_len = line.len() + 1;
+        if total + line_len > limit && i < all_turns.len().saturating_sub(2) {
+            skipped += 1;
+        } else {
+            push_line!(line.clone());
+        }
+    }
+
+    if skipped > 0 {
         push_line!(format!(
-            "> ⚠️ 已达长度上限（{} 字符），早期对话已省略。",
-            limit
+            "> ⚠️ 已达长度上限（{} 字符），早期 {} 条对话已省略",
+            limit, skipped
         ));
     }
 
