@@ -1,4 +1,4 @@
-//! Context Reset - Claude Code → Codex 上下文迁移工具
+//! Context Transfer - Claude Code ↔ Codex 上下文迁移工具
 
 mod claud_extractor;
 mod codex_extractor;
@@ -21,5 +21,5 @@ pub fn run() {
             commands::export_context,
         ])
         .run(tauri::generate_context!())
-        .expect("启动 Context Reset 失败");
+        .expect("启动 Context Transfer 失败");
 }

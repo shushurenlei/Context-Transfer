@@ -24,7 +24,7 @@ export default function Header({
             🔄
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-[var(--text-primary)]">Context Reset</h1>
+            <h1 className="text-lg font-semibold text-[var(--text-primary)]">Context Transfer</h1>
           </div>
         </div>
 

@@ -1,8 +1,8 @@
-# Context Reset
+# Context Transfer
 
-🔄 Claude Code → Codex CLI 上下文迁移工具（Tauri 桌面应用）
+🔄 Claude Code ↔ Codex CLI 双向上下文迁移工具（Tauri 桌面应用）
 
-在 [Claude Code](https://claude.ai/code) 和 [Codex CLI](https://github.com/anthropics/codex) 之间切换时，对话上下文会丢失。Context Reset 提供原生桌面界面，一键提取 Claude Code 的会话上下文并注入到 Codex。
+在 [Claude Code](https://claude.ai/code) 和 [Codex CLI](https://github.com/anthropics/codex) 之间切换时，对话上下文会丢失。Context Transfer 提供原生桌面界面，支持双向一键迁移会话上下文。
 
 ## 功能特性
 

@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    context_reset_lib::run()
+    context_transfer_lib::run()
 }

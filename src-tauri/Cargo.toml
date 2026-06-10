@@ -1,10 +1,10 @@
 [package]
-name = "context-reset"
+name = "context-transfer"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "context_reset_lib"
+name = "context_transfer_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
