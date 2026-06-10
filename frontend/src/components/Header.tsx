@@ -54,19 +54,17 @@ export default function Header({
           </div>
         </div>
 
-        {/* 右侧：项目路径（仅 Claude → Codex 时显示） */}
-        {isClaudeToCodex && (
-          <div className="flex items-center gap-2 shrink-0">
-            <label className="text-xs text-[var(--text-secondary)] whitespace-nowrap">项目路径</label>
-            <input
-              type="text"
-              value={projectPath}
-              onChange={(e) => onProjectPathChange(e.target.value)}
-              className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] w-60 focus:outline-none focus:border-[var(--accent)]"
-              placeholder="点击下方已知项目或手动输入"
-            />
-          </div>
-        )}
+        {/* 右侧：项目路径，始终占位防止居中偏移 */}
+        <div className={`flex items-center gap-2 shrink-0 ${isClaudeToCodex ? '' : 'invisible'}`}>
+          <label className="text-xs text-[var(--text-secondary)] whitespace-nowrap">项目路径</label>
+          <input
+            type="text"
+            value={projectPath}
+            onChange={(e) => onProjectPathChange(e.target.value)}
+            className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] w-60 focus:outline-none focus:border-[var(--accent)]"
+            placeholder="点击下方已知项目或手动输入"
+          />
+        </div>
       </div>
     </header>
   )
