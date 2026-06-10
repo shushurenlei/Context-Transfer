@@ -87,6 +87,7 @@ jobs:
         shell: bash
         run: |
           set -eux
+          npm --prefix frontend run build
           cd src-tauri
           ../frontend/node_modules/.bin/tauri build
 
