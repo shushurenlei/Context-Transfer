@@ -47,6 +47,7 @@ pub struct MigrateRequest {
     pub model: Option<String>,
     pub max_turns: Option<usize>,
     pub max_length: Option<usize>,
+    pub max_total_length: Option<usize>,
     #[serde(default)]
     pub direction: String,
 }
@@ -57,6 +58,7 @@ pub struct CopyPromptRequest {
     pub project_path: String,
     pub session_id: Option<String>,
     pub max_turns: Option<usize>,
+    pub max_total_length: Option<usize>,
     #[serde(default)]
     pub direction: String,
 }
@@ -76,6 +78,7 @@ pub struct ExportRequest {
     pub session_id: Option<String>,
     pub max_turns: Option<usize>,
     pub max_length: Option<usize>,
+    pub max_total_length: Option<usize>,
     #[serde(default)]
     pub direction: String,
 }
@@ -143,6 +146,7 @@ pub fn migrate(request: MigrateRequest) -> Result<MigrateResult, String> {
         dir,
         request.model.as_deref(),
         request.max_length.unwrap_or(2000),
+        request.max_total_length,
     )?;
 
     Ok(MigrateResult {
@@ -171,7 +175,7 @@ pub fn copy_prompt(request: CopyPromptRequest) -> Result<serde_json::Value, Stri
         )?
     };
 
-    let prompt = codex_injector::copy_prompt(&context, 800)?;
+    let prompt = codex_injector::copy_prompt(&context, 800, request.max_total_length)?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -217,6 +221,7 @@ pub fn export_context(request: ExportRequest) -> Result<ExportResult, String> {
     let md = crate::context_formatter::format_as_markdown(
         &context,
         request.max_length.unwrap_or(2000),
+        request.max_total_length,
     );
 
     let filepath = std::path::Path::new(&request.project_path)

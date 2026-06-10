@@ -45,6 +45,7 @@ export default function MigratePanel({
   const [selectedMode, setSelectedMode] = useState<MigrateMode>('prompt')
   const [maxTurns, setMaxTurns] = useState<number | null>(null)
   const [maxLength, setMaxLength] = useState(2000)
+  const [maxTotalLength, setMaxTotalLength] = useState<number | null>(50000)
   const [model, setModel] = useState('')
   const [migrating, setMigrating] = useState(false)
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -57,7 +58,7 @@ export default function MigratePanel({
     setResult(null)
     try {
       if (selectedMode === 'prompt') {
-        const res = await api.copyPrompt(projectPath, sessionId, maxTurns, direction)
+        const res = await api.copyPrompt(projectPath, sessionId, maxTurns, direction, maxTotalLength)
         setResult({ success: res.success, message: `📋 上下文已复制到剪贴板，在 ${targetName} 中粘贴即可` })
       } else {
         const res = await api.migrate(projectPath, selectedMode, {
@@ -65,6 +66,7 @@ export default function MigratePanel({
           model: model || undefined,
           maxTurns,
           maxLength,
+          maxTotalLength,
           direction,
         })
         setResult({ success: res.success, message: res.message })
@@ -115,7 +117,7 @@ export default function MigratePanel({
         </div>
 
         {/* 参数设置 */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--text-secondary)] block mb-1">最大轮次</label>
             <input
@@ -132,6 +134,16 @@ export default function MigratePanel({
               type="number"
               value={maxLength}
               onChange={e => setMaxLength(Number(e.target.value))}
+              className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--text-secondary)] block mb-1">总长度上限（≈ tokens）</label>
+            <input
+              type="number"
+              value={maxTotalLength ?? ''}
+              onChange={e => setMaxTotalLength(e.target.value ? Number(e.target.value) : null)}
+              placeholder="50K 字符 ≈ 15K tokens"
               className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
             />
           </div>

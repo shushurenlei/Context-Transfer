@@ -74,6 +74,7 @@ export const api = {
       model?: string
       maxTurns?: number | null
       maxLength?: number
+      maxTotalLength?: number | null
       direction?: Direction
     },
   ) =>
@@ -85,6 +86,7 @@ export const api = {
         model: options?.model || null,
         maxTurns: options?.maxTurns ?? null,
         maxLength: options?.maxLength || 2000,
+        maxTotalLength: options?.maxTotalLength ?? null,
         direction: options?.direction || 'claude-to-codex',
       },
     }),
@@ -94,6 +96,7 @@ export const api = {
     sessionId?: string,
     maxTurns: number | null = null,
     direction: Direction = 'claude-to-codex',
+    maxTotalLength?: number | null,
   ) =>
     invoke<{ success: boolean; prompt: string }>('copy_prompt', {
       request: {
@@ -101,6 +104,7 @@ export const api = {
         sessionId: sessionId || null,
         maxTurns,
         direction,
+        maxTotalLength: maxTotalLength ?? null,
       },
     }),
 

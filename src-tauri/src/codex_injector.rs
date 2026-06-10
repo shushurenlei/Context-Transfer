@@ -222,12 +222,13 @@ pub fn do_migrate(
     direction: &str,
     model: Option<&str>,
     max_content_length: usize,
+    max_total_length: Option<usize>,
 ) -> Result<MigrateResult, String> {
     let is_codex_to_claude = direction == "codex-to-claude";
 
     match mode {
         "prompt" => {
-            let prompt = context_formatter::format_as_prompt(context, max_content_length);
+            let prompt = context_formatter::format_as_prompt(context, max_content_length, max_total_length);
             copy_to_clipboard(&prompt)?;
             let target = if is_codex_to_claude { "Claude Code" } else { "Codex" };
             Ok(MigrateResult {
@@ -237,7 +238,7 @@ pub fn do_migrate(
             })
         }
         "agents-md" => {
-            let md = context_formatter::format_as_markdown(context, max_content_length);
+            let md = context_formatter::format_as_markdown(context, max_content_length, max_total_length);
             let filepath = if is_codex_to_claude {
                 inject_via_claude_md(&md, project_path, true)?
             } else {
@@ -250,7 +251,7 @@ pub fn do_migrate(
             })
         }
         "auto" => {
-            let md = context_formatter::format_as_markdown(context, max_content_length);
+            let md = context_formatter::format_as_markdown(context, max_content_length, max_total_length);
             let filepath = if is_codex_to_claude {
                 inject_via_claude_md(&md, project_path, true)?
             } else {
@@ -276,8 +277,9 @@ pub fn do_migrate(
 pub fn copy_prompt(
     context: &ContextInfo,
     max_content_length: usize,
+    max_total_length: Option<usize>,
 ) -> Result<String, String> {
-    let prompt = context_formatter::format_as_prompt(context, max_content_length);
+    let prompt = context_formatter::format_as_prompt(context, max_content_length, max_total_length);
     copy_to_clipboard(&prompt)?;
     Ok(prompt)
 }
