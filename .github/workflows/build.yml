@@ -3,8 +3,13 @@ name: Build
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -70,12 +75,74 @@ jobs:
         run: cd src-tauri && cargo fetch
 
       - name: Build Rust (check-only on non-macOS)
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-latest' && !startsWith(github.ref, 'refs/tags/')
         run: cd src-tauri && cargo check
 
       - name: Build Rust (full build on macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-latest' && !startsWith(github.ref, 'refs/tags/')
         run: cd src-tauri && cargo build --release
+
+      - name: Build Tauri bundles
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -eux
+          cd src-tauri
+          ../frontend/node_modules/.bin/tauri build
+
+      - name: Upload Tauri bundles
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-transfer-${{ matrix.os }}
+          path: |
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.rpm
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+          if-no-files-found: error
 
       - name: Run tests
         run: cd src-tauri && cargo test
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Tauri bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          assets=(artifacts/**/*)
+          files=()
+          for asset in "${assets[@]}"; do
+            if [ -f "$asset" ]; then
+              files+=("$asset")
+            fi
+          done
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No release assets found"
+            exit 1
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
