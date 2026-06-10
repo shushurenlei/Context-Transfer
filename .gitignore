@@ -29,6 +29,10 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Project config files (不应提交到仓库)
+AGENTS.md
+CLAUDE.md
+
 # Misc
 *.pyc
 __pycache__/
