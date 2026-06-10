@@ -296,10 +296,15 @@ pub fn do_migrate(
                 max_content_length,
                 max_total_length,
             );
-            let filepath = if is_codex_to_claude {
-                inject_via_claude_md(&md, project_path, true)?
+            let target_path = if is_codex_to_claude {
+                &context.cwd
             } else {
-                inject_via_agents_md(&md, project_path, true)?
+                project_path
+            };
+            let filepath = if is_codex_to_claude {
+                inject_via_claude_md(&md, target_path, true)?
+            } else {
+                inject_via_agents_md(&md, target_path, true)?
             };
             Ok(MigrateResult {
                 success: true,
@@ -313,15 +318,20 @@ pub fn do_migrate(
                 max_content_length,
                 max_total_length,
             );
-            let filepath = if is_codex_to_claude {
-                inject_via_claude_md(&md, project_path, true)?
+            let target_path = if is_codex_to_claude {
+                &context.cwd
             } else {
-                inject_via_agents_md(&md, project_path, true)?
+                project_path
+            };
+            let filepath = if is_codex_to_claude {
+                inject_via_claude_md(&md, target_path, true)?
+            } else {
+                inject_via_agents_md(&md, target_path, true)?
             };
             let pid = if is_codex_to_claude {
-                launch_claude(project_path)?
+                launch_claude(target_path)?
             } else {
-                launch_codex(project_path, model)?
+                launch_codex(target_path, model)?
             };
             let app = if is_codex_to_claude {
                 "Claude Code"
