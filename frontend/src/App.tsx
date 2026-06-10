@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, Session, ContextInfo, ProjectEntry } from './api'
+import { api, Session, ContextInfo, ProjectEntry, Direction } from './api'
 import SessionList from './components/SessionList'
 import ContextPreview from './components/ContextPreview'
 import MigratePanel from './components/MigratePanel'
@@ -9,6 +9,7 @@ type Step = 'select' | 'preview' | 'migrate'
 
 export default function App() {
   const [projectPath, setProjectPath] = useState('')
+  const [direction, setDirection] = useState<Direction>('claude-to-codex')
   const [sessions, setSessions] = useState<Session[]>([])
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
   const [context, setContext] = useState<ContextInfo | null>(null)
@@ -27,13 +28,12 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-
   // 加载会话列表
-  const loadSessions = useCallback(async (path: string) => {
+  const loadSessions = useCallback(async (path: string, dir: Direction) => {
     setLoading(true)
     setError(null)
     try {
-      const list = await api.listSessions(path)
+      const list = await api.listSessions(path, dir)
       setSessions(list)
     } catch (e: any) {
       setError(e.message)
@@ -43,8 +43,16 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (projectPath) loadSessions(projectPath)
-  }, [projectPath, loadSessions])
+    if (projectPath) loadSessions(projectPath, direction)
+  }, [projectPath, direction, loadSessions])
+
+  // 切换方向
+  const handleDirectionChange = (dir: Direction) => {
+    setDirection(dir)
+    setStep('select')
+    setContext(null)
+    setSelectedSession(null)
+  }
 
   // 选择会话并提取上下文
   const handleSelectSession = async (sessionId: string) => {
@@ -52,7 +60,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const ctx = await api.extractContext(projectPath, sessionId)
+      const ctx = await api.extractContext(projectPath, sessionId, null, direction)
       setContext(ctx)
       setStep('preview')
     } catch (e: any) {
@@ -80,14 +88,16 @@ export default function App() {
     setStep('select')
     setContext(null)
     setSelectedSession(null)
-    loadSessions(projectPath)
+    loadSessions(projectPath, direction)
   }
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
       <Header
         projectPath={projectPath}
-        onProjectPathChange={(p) => { setProjectPath(p); loadSessions(p); }}
+        direction={direction}
+        onDirectionChange={handleDirectionChange}
+        onProjectPathChange={(p) => { setProjectPath(p); loadSessions(p, direction); }}
       />
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-6">
@@ -102,11 +112,12 @@ export default function App() {
             sessions={sessions}
             loading={loading}
             projectPath={projectPath}
+            direction={direction}
             knownProjects={knownProjects}
             onSelect={handleSelectSession}
             onUseLatest={handleUseLatest}
-            onRefresh={() => loadSessions(projectPath)}
-            onProjectPathChange={(p) => { setProjectPath(p); loadSessions(p); }}
+            onRefresh={() => loadSessions(projectPath, direction)}
+            onProjectPathChange={(p) => { setProjectPath(p); loadSessions(p, direction); }}
           />
         )}
 
@@ -122,6 +133,7 @@ export default function App() {
             <MigratePanel
               projectPath={projectPath}
               sessionId={selectedSession || undefined}
+              direction={direction}
               onComplete={handleMigrateDone}
             />
           </div>

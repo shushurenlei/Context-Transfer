@@ -1,6 +1,7 @@
 //! Context Reset - Claude Code → Codex 上下文迁移工具
 
 mod claud_extractor;
+mod codex_extractor;
 mod commands;
 mod codex_injector;
 mod context_formatter;

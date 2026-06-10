@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import type { Session, ProjectEntry } from '../api'
+import type { Session, ProjectEntry, Direction } from '../api'
 
 interface SessionListProps {
   sessions: Session[]
   loading: boolean
   projectPath: string
+  direction: Direction
   knownProjects: ProjectEntry[]
   onSelect: (sessionId: string) => void
   onUseLatest: () => void
@@ -26,10 +27,11 @@ function formatSize(bytes: number): string {
 }
 
 export default function SessionList({
-  sessions, loading, knownProjects,
+  sessions, loading, knownProjects, direction,
   onSelect, onUseLatest, onRefresh,
   onProjectPathChange,
 }: SessionListProps) {
+  const sourceName = direction === 'codex-to-claude' ? 'Codex' : 'Claude Code'
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   return (
@@ -38,7 +40,7 @@ export default function SessionList({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-medium text-[var(--text-primary)]">
-            Claude Code 会话
+            {sourceName} 会话
           </h2>
           <p className="text-sm text-[var(--text-secondary)]">
             选择一个会话来提取上下文
@@ -71,7 +73,7 @@ export default function SessionList({
         </div>
       ) : sessions.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-[var(--text-secondary)] text-lg mb-2">未找到 Claude Code 会话</p>
+          <p className="text-[var(--text-secondary)] text-lg mb-2">未找到 {sourceName} 会话</p>
           <p className="text-[var(--text-secondary)] text-sm mb-6">
             请确认项目路径正确，或在下方选择一个已知项目
           </p>

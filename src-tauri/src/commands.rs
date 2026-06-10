@@ -1,6 +1,7 @@
 //! Tauri Commands - 暴露给前端的 API
 
 use crate::claud_extractor::{self, ContextInfo, Session, ProjectEntry};
+use crate::codex_extractor;
 use crate::codex_injector;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -33,6 +34,8 @@ pub struct ExtractRequest {
     pub project_path: String,
     pub session_id: Option<String>,
     pub max_turns: Option<usize>,
+    #[serde(default)]
+    pub direction: String, // "claude-to-codex" (default) or "codex-to-claude"
 }
 
 #[derive(Debug, Deserialize)]
@@ -44,6 +47,8 @@ pub struct MigrateRequest {
     pub model: Option<String>,
     pub max_turns: Option<usize>,
     pub max_length: Option<usize>,
+    #[serde(default)]
+    pub direction: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,12 +57,16 @@ pub struct CopyPromptRequest {
     pub project_path: String,
     pub session_id: Option<String>,
     pub max_turns: Option<usize>,
+    #[serde(default)]
+    pub direction: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CleanupRequest {
     pub project_path: String,
+    #[serde(default)]
+    pub direction: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +76,8 @@ pub struct ExportRequest {
     pub session_id: Option<String>,
     pub max_turns: Option<usize>,
     pub max_length: Option<usize>,
+    #[serde(default)]
+    pub direction: String,
 }
 
 /// 检测当前工作目录
@@ -77,35 +88,59 @@ pub fn detect_project() -> String {
         .unwrap_or_else(|_| "/".to_string())
 }
 
-/// 列出会话
+/// 列出会话（支持方向）
 #[tauri::command]
-pub fn list_sessions(project_path: String) -> Result<Vec<Session>, String> {
-    claud_extractor::list_sessions(&project_path)
+pub fn list_sessions(project_path: String, direction: Option<String>) -> Result<Vec<Session>, String> {
+    let dir = direction.unwrap_or_default();
+    if dir == "codex-to-claude" {
+        codex_extractor::list_sessions()
+    } else {
+        claud_extractor::list_sessions(&project_path)
+    }
 }
 
-/// 提取上下文
+/// 提取上下文（支持方向）
 #[tauri::command]
 pub fn extract_context(request: ExtractRequest) -> Result<ContextInfo, String> {
-    claud_extractor::extract_context(
-        &request.project_path,
-        request.session_id.as_deref(),
-        request.max_turns,
-    )
+    if request.direction == "codex-to-claude" {
+        codex_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )
+    } else {
+        claud_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )
+    }
 }
 
 /// 执行迁移
 #[tauri::command]
 pub fn migrate(request: MigrateRequest) -> Result<MigrateResult, String> {
-    let context = claud_extractor::extract_context(
-        &request.project_path,
-        request.session_id.as_deref(),
-        request.max_turns,
-    )?;
+    let dir = request.direction.as_str();
+
+    let context = if dir == "codex-to-claude" {
+        codex_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )?
+    } else {
+        claud_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )?
+    };
 
     let result = codex_injector::do_migrate(
         &context,
         &request.project_path,
         &request.mode,
+        dir,
         request.model.as_deref(),
         request.max_length.unwrap_or(2000),
     )?;
@@ -120,11 +155,21 @@ pub fn migrate(request: MigrateRequest) -> Result<MigrateResult, String> {
 /// 复制 prompt 到剪贴板
 #[tauri::command]
 pub fn copy_prompt(request: CopyPromptRequest) -> Result<serde_json::Value, String> {
-    let context = claud_extractor::extract_context(
-        &request.project_path,
-        request.session_id.as_deref(),
-        request.max_turns,
-    )?;
+    let dir = request.direction.as_str();
+
+    let context = if dir == "codex-to-claude" {
+        codex_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )?
+    } else {
+        claud_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )?
+    };
 
     let prompt = codex_injector::copy_prompt(&context, 800)?;
 
@@ -134,24 +179,40 @@ pub fn copy_prompt(request: CopyPromptRequest) -> Result<serde_json::Value, Stri
     }))
 }
 
-/// 清理 AGENTS.md
+/// 清理迁移内容
 #[tauri::command]
 pub fn cleanup(request: CleanupRequest) -> Result<CleanupResult, String> {
-    let cleaned = codex_injector::cleanup_agents_md(&request.project_path)?;
+    let dir = request.direction.as_str();
+    let (cleaned, msg) = if dir == "codex-to-claude" {
+        let c = codex_injector::cleanup_claude_md(&request.project_path)?;
+        (c, if c { "已清理 CLAUDE.md" } else { "CLAUDE.md 无需清理" })
+    } else {
+        let c = codex_injector::cleanup_agents_md(&request.project_path)?;
+        (c, if c { "已清理 AGENTS.md" } else { "AGENTS.md 无需清理" })
+    };
+
     Ok(CleanupResult {
         cleaned,
-        message: if cleaned { "已清理".to_string() } else { "无需清理".to_string() },
+        message: msg.to_string(),
     })
 }
 
 /// 导出上下文
 #[tauri::command]
 pub fn export_context(request: ExportRequest) -> Result<ExportResult, String> {
-    let context = claud_extractor::extract_context(
-        &request.project_path,
-        request.session_id.as_deref(),
-        request.max_turns,
-    )?;
+    let context = if request.direction == "codex-to-claude" {
+        codex_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )?
+    } else {
+        claud_extractor::extract_context(
+            &request.project_path,
+            request.session_id.as_deref(),
+            request.max_turns,
+        )?
+    };
 
     let md = crate::context_formatter::format_as_markdown(
         &context,

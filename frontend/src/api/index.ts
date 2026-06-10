@@ -41,29 +41,42 @@ export interface ExportResult {
   filepath: string
 }
 
+export type Direction = 'claude-to-codex' | 'codex-to-claude'
+
 export const api = {
   detectProject: () => invoke<string>('detect_project'),
 
   listProjects: () => invoke<ProjectEntry[]>('list_projects'),
 
-  listSessions: (projectPath: string) =>
-    invoke<Session[]>('list_sessions', { projectPath }),
+  listSessions: (projectPath: string, direction: Direction = 'claude-to-codex') =>
+    invoke<Session[]>('list_sessions', { projectPath, direction }),
 
-  extractContext: (projectPath: string, sessionId?: string, maxTurns: number | null = null) =>
+  extractContext: (
+    projectPath: string,
+    sessionId?: string,
+    maxTurns: number | null = null,
+    direction: Direction = 'claude-to-codex',
+  ) =>
     invoke<ContextInfo>('extract_context', {
       request: {
         projectPath,
         sessionId: sessionId || null,
         maxTurns,
+        direction,
       },
     }),
 
-  migrate: (projectPath: string, mode: 'prompt' | 'agents-md' | 'auto', options?: {
-    sessionId?: string
-    model?: string
-    maxTurns?: number | null
-    maxLength?: number
-  }) =>
+  migrate: (
+    projectPath: string,
+    mode: 'prompt' | 'agents-md' | 'auto',
+    options?: {
+      sessionId?: string
+      model?: string
+      maxTurns?: number | null
+      maxLength?: number
+      direction?: Direction
+    },
+  ) =>
     invoke<MigrateResult>('migrate', {
       request: {
         projectPath,
@@ -72,30 +85,44 @@ export const api = {
         model: options?.model || null,
         maxTurns: options?.maxTurns ?? null,
         maxLength: options?.maxLength || 2000,
+        direction: options?.direction || 'claude-to-codex',
       },
     }),
 
-  copyPrompt: (projectPath: string, sessionId?: string, maxTurns: number | null = null) =>
+  copyPrompt: (
+    projectPath: string,
+    sessionId?: string,
+    maxTurns: number | null = null,
+    direction: Direction = 'claude-to-codex',
+  ) =>
     invoke<{ success: boolean; prompt: string }>('copy_prompt', {
       request: {
         projectPath,
         sessionId: sessionId || null,
         maxTurns,
+        direction,
       },
     }),
 
-  cleanup: (projectPath: string) =>
+  cleanup: (projectPath: string, direction: Direction = 'claude-to-codex') =>
     invoke<CleanupResult>('cleanup', {
-      request: { projectPath },
+      request: { projectPath, direction },
     }),
 
-  exportContext: (projectPath: string, sessionId?: string, maxTurns: number | null = null, maxLength = 2000) =>
+  exportContext: (
+    projectPath: string,
+    sessionId?: string,
+    maxTurns: number | null = null,
+    maxLength = 2000,
+    direction: Direction = 'claude-to-codex',
+  ) =>
     invoke<ExportResult>('export_context', {
       request: {
         projectPath,
         sessionId: sessionId || null,
         maxTurns,
         maxLength,
+        direction,
       },
     }),
 }
