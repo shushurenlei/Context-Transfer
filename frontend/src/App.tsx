@@ -53,6 +53,8 @@ export default function App() {
   // 切换方向
   const handleDirectionChange = (dir: Direction) => {
     setDirection(dir)
+    setProjectPath('')
+    setSessions([])
     setStep('select')
     setContext(null)
     setSelectedSession(null)
