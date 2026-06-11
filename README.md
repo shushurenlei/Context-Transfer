@@ -3,7 +3,7 @@
   <p><strong>AI 编码助手上下文迁移工具</strong></p>
 
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-blue" />
+    <img alt="Version" src="https://img.shields.io/badge/version-0.1.4-blue" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" />
     <img alt="Built with" src="https://img.shields.io/badge/built%20with-Tauri%202-6366f1" />
     <img alt="Downloads" src="https://img.shields.io/github/downloads/shushurenlei/Context-Transfer/total?color=green" />

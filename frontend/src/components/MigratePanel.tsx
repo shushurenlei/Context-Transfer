@@ -1,201 +1,206 @@
-import { useState, useMemo } from 'react'
-import { api, Direction } from '../api'
+import { useState } from 'react'
+import { api } from '../api'
+import type { Direction } from '../api'
 
-interface MigratePanelProps {
+interface Props {
   projectPath: string
   sessionId?: string
   direction: Direction
   onComplete: () => void
 }
 
-type MigrateMode = 'prompt' | 'agents-md' | 'auto'
+type Mode = 'auto' | 'file' | 'prompt'
+type Status = 'idle' | 'running' | 'done'
 
-function getModeOptions(direction: Direction) {
-  const target = direction === 'codex-to-claude' ? 'Claude Code' : 'Codex'
-  const mdFile = direction === 'codex-to-claude' ? 'CLAUDE.md' : 'AGENTS.md'
-  return [
-    {
-      mode: 'prompt' as MigrateMode,
-      label: 'Prompt 模式',
-      desc: `生成文本并复制到剪贴板，在 ${target} 中粘贴`,
-      icon: '📋',
-    },
-    {
-      mode: 'agents-md' as MigrateMode,
-      label: `${mdFile} 模式`,
-      desc: `写入项目 ${mdFile}，${target} 启动自动读取`,
-      icon: '📝',
-    },
-    {
-      mode: 'auto' as MigrateMode,
-      label: '一键自动模式',
-      desc: `写入 ${mdFile} 并启动 ${target}`,
-      icon: '🚀',
-    },
-  ]
+interface ModeOption {
+  key: Mode
+  label: string
+  desc: string
+  action: string
 }
 
-export default function MigratePanel({
-  projectPath,
-  sessionId,
-  direction,
-  onComplete: _onComplete,
-}: MigratePanelProps) {
-  const modeOptions = useMemo(() => getModeOptions(direction), [direction])
-  const [selectedMode, setSelectedMode] = useState<MigrateMode>('prompt')
-  const [maxTurns, setMaxTurns] = useState<number | null>(null)
-  const [maxLength, setMaxLength] = useState(2000)
-  const [maxTotalLength, setMaxTotalLength] = useState<number | null>(50000)
-  const [model, setModel] = useState('')
-  const [migrating, setMigrating] = useState(false)
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
+export default function MigratePanel({ projectPath, sessionId, direction, onComplete }: Props) {
+  const [mode, setMode] = useState<Mode>('auto')
+  const [truncate, setTruncate] = useState(200)
+  const [status, setStatus] = useState<Status>('idle')
+  const [resultMsg, setResultMsg] = useState('')
 
-  const isClaudeToCodex = direction === 'claude-to-codex'
-  const targetName = isClaudeToCodex ? 'Codex' : 'Claude Code'
+  const label = direction === 'claude-to-codex'
+    ? { src: 'Claude Code', tgt: 'Codex', mdFile: 'CLAUDE.md' }
+    : { src: 'Codex', tgt: 'Claude Code', mdFile: 'AGENTS.md' }
+
+  const MODES: ModeOption[] = [
+    {
+      key: 'auto',
+      label: '一键自动',
+      desc: `写入 ${label.mdFile} 并自动启动 ${label.tgt} 终端`,
+      action: `写入并启动 ${label.tgt}`,
+    },
+    {
+      key: 'file',
+      label: '文件写入',
+      desc: `只写入 ${label.mdFile}，${label.tgt} 启动时自动读取`,
+      action: `写入 ${label.mdFile}`,
+    },
+    {
+      key: 'prompt',
+      label: '复制 Prompt',
+      desc: '生成上下文文本复制到剪贴板，手动粘贴到目标工具',
+      action: '复制到剪贴板',
+    },
+  ]
+
+  const canMigrate = !!sessionId && status !== 'running'
+  const activeMode = MODES.find(m => m.key === mode)!
 
   const handleMigrate = async () => {
-    setMigrating(true)
-    setResult(null)
+    if (!canMigrate) return
+    setStatus('running')
     try {
-      if (selectedMode === 'prompt') {
-        const res = await api.copyPrompt(projectPath, sessionId, maxTurns, direction, maxTotalLength)
-        setResult({ success: res.success, message: `📋 上下文已复制到剪贴板，在 ${targetName} 中粘贴即可` })
-      } else {
-        const res = await api.migrate(projectPath, selectedMode, {
-          sessionId,
-          model: model || undefined,
-          maxTurns,
-          maxLength,
-          maxTotalLength,
-          direction,
+      if (mode === 'auto') {
+        const res = await api.migrate(projectPath, 'auto', {
+          sessionId, direction, maxLength: 2000,
         })
-        setResult({ success: res.success, message: res.message })
+        setResultMsg(res.message)
+      } else if (mode === 'file') {
+        const res = await api.migrate(projectPath, 'agents-md', {
+          sessionId, direction, maxLength: 2000,
+        })
+        setResultMsg(res.message)
+      } else {
+        const res = await api.copyPrompt(projectPath, sessionId, truncate, direction, null)
+        setResultMsg(res.prompt ? '上下文已复制到剪贴板，直接粘贴即可' : '已复制')
       }
+      setStatus('done')
+      onComplete()
+      setTimeout(() => setStatus('idle'), 3000)
     } catch (e: any) {
-      setResult({ success: false, message: e.message })
-    } finally {
-      setMigrating(false)
-    }
-  }
-
-  const handleCleanup = async () => {
-    try {
-      const res = await api.cleanup(projectPath, direction)
-      setResult({ success: res.cleaned, message: res.message })
-    } catch (e: any) {
-      setResult({ success: false, message: e.message })
+      setResultMsg(e.message || '迁移失败')
+      setStatus('done')
+      setTimeout(() => setStatus('idle'), 3000)
     }
   }
 
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">迁移到 {targetName}</h3>
-        <p className="text-xs text-[var(--text-secondary)] mt-1">
-          选择注入方式，将上下文迁移到 {targetName}
-        </p>
+    <section style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden', height: '100%' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px', flexShrink: 0,
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>迁移控制</span>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+          → {label.tgt}
+        </span>
       </div>
 
-      <div className="p-5 space-y-5">
-        {/* 注入方式选择 */}
-        <div className="grid grid-cols-3 gap-3">
-          {modeOptions.map(opt => (
-            <button
-              key={opt.mode}
-              onClick={() => setSelectedMode(opt.mode)}
-              className={`p-4 rounded-lg border text-left transition-all ${
-                selectedMode === opt.mode
-                  ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                  : 'border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--accent)]/50'
-              }`}
-            >
-              <div className="text-2xl mb-2">{opt.icon}</div>
-              <div className="text-sm font-medium text-[var(--text-primary)]">{opt.label}</div>
-              <div className="text-xs text-[var(--text-secondary)] mt-1">{opt.desc}</div>
-            </button>
-          ))}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* Mode cards */}
+        <div style={{ padding: '16px 16px 0' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: 10 }}>
+            迁移方式
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} role="radiogroup" aria-label="迁移方式">
+            {MODES.map(opt => (
+              <label
+                key={opt.key}
+                style={{
+                  display: 'block', padding: '10px 12px', borderRadius: 8,
+                  border: mode === opt.key ? '1px solid var(--accent)' : '1px solid var(--border)',
+                  cursor: 'pointer', transition: 'all 0.15s ease',
+                  background: mode === opt.key ? 'var(--raised)' : 'var(--surface)',
+                  boxShadow: mode === opt.key ? '0 0 0 1px var(--accent)' : 'none',
+                  position: 'relative',
+                }}
+              >
+                <input type="radio" name="migrate-mode" checked={mode === opt.key} onChange={() => setMode(opt.key)}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{opt.label}</span>
+                  {opt.key === 'auto' && (
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: 'var(--accent)', color: '#fff', textTransform: 'uppercase' }}>推荐</span>
+                  )}
+                  {mode === opt.key && (
+                    <span style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{opt.desc}</div>
+              </label>
+            ))}
+          </div>
         </div>
 
-        {/* 参数设置 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-[var(--text-secondary)] block mb-1">最大轮次</label>
-            <input
-              type="number"
-              value={maxTurns ?? ''}
-              onChange={e => setMaxTurns(e.target.value ? Number(e.target.value) : null)}
-              placeholder="不限"
-              className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-[var(--text-secondary)] block mb-1">单条最大长度</label>
-            <input
-              type="number"
-              value={maxLength}
-              onChange={e => setMaxLength(Number(e.target.value))}
-              className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-[var(--text-secondary)] block mb-1">总长度上限（≈ tokens）</label>
-            <input
-              type="number"
-              value={maxTotalLength ?? ''}
-              onChange={e => setMaxTotalLength(e.target.value ? Number(e.target.value) : null)}
-              placeholder="50K 字符 ≈ 15K tokens"
-              className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-            />
-          </div>
-          {isClaudeToCodex && (
-            <div>
-              <label className="text-xs text-[var(--text-secondary)] block mb-1">Codex 模型（可选）</label>
-              <input
-                type="text"
-                value={model}
-                onChange={e => setModel(e.target.value)}
-                placeholder="默认使用配置"
-                className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-              />
+        {/* Truncation slider (prompt mode) */}
+        {mode === 'prompt' && (
+          <div style={{ padding: '0 16px 16px', marginTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: 10, display: 'flex', justifyContent: 'space-between' }}>
+              <span>消息条数</span>
+              <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: '0', fontSize: 12 }}>最近 {truncate} 条</span>
             </div>
-          )}
-        </div>
-
-        {/* 操作按钮 */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleMigrate}
-            disabled={migrating}
-            className="flex-1 py-3 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium transition-colors disabled:opacity-50"
-          >
-            {migrating ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                迁移中...
-              </span>
-            ) : (
-              `🔄 开始迁移（${modeOptions.find(o => o.mode === selectedMode)?.label}）`
-            )}
-          </button>
-          <button
-            onClick={handleCleanup}
-            className="px-4 py-3 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-sm transition-colors"
-          >
-            清理迁移
-          </button>
-        </div>
-
-        {/* 结果提示 */}
-        {result && (
-          <div className={`p-3 rounded-lg text-sm ${
-            result.success
-              ? 'bg-green-50 border border-green-300 text-green-700'
-              : 'bg-red-50 border border-red-300 text-red-700'
-          }`}>
-            {result.message}
+            <input
+              type="range" min={20} max={500} step={10} value={truncate}
+              onChange={e => setTruncate(+e.target.value)}
+              style={{ width: '100%', margin: '8px 0 0', accentColor: 'var(--accent)' }}
+            />
           </div>
         )}
+
+        {/* Output info */}
+        <div style={{ padding: '0 16px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: 10 }}>
+            输出
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', borderRadius: 8,
+            border: '1px solid var(--border)', background: 'var(--bg)',
+          }}>
+            <code style={{
+              flex: 1, fontSize: 12, fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+              color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {mode === 'prompt' ? '系统剪贴板' : `${projectPath || '~/project'}/${label.mdFile}`}
+            </code>
+          </div>
+        </div>
+
+        {/* Action */}
+        <div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
+          {status === 'done' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '8px 12px', borderRadius: 8, marginBottom: 12,
+              background: '#e8f5e9', color: 'var(--success)', fontSize: 13, fontWeight: 600,
+            }} role="status">
+              <span>✓</span> {resultMsg || `已完成`}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleMigrate}
+            disabled={!canMigrate}
+            style={{
+              display: 'block', width: '100%', padding: '12px 0', borderRadius: 24,
+              border: 'none', cursor: canMigrate ? 'pointer' : 'not-allowed',
+              fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+              letterSpacing: '0.01em', transition: 'all 0.15s ease',
+              background: mode === 'auto'
+                ? (canMigrate ? 'var(--accent)' : 'var(--border)')
+                : (canMigrate ? 'var(--text)' : 'var(--border)'),
+              color: canMigrate ? '#fff' : 'var(--muted)',
+            }}
+          >
+            {status === 'idle' && activeMode.action}
+            {status === 'running' && '迁移中…'}
+            {status === 'done' && '完成 ✓'}
+          </button>
+          <p style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 10, lineHeight: 1.4 }}>
+            {sessionId
+              ? `${label.src} → ${label.tgt}`
+              : '请先在左侧选择一个源会话'}
+          </p>
+        </div>
       </div>
-    </div>
+    </section>
   )
 }

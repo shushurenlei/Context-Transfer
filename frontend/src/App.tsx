@@ -1,39 +1,33 @@
-import { useState, useEffect, useCallback } from 'react'
-import { api, Session, ContextInfo, ProjectEntry, Direction } from './api'
-import SessionList from './components/SessionList'
+import { useEffect, useMemo, useState } from 'react'
+import { api } from './api'
+import type { ContextInfo, Direction, ProjectEntry, Session } from './api'
 import ContextPreview from './components/ContextPreview'
-import MigratePanel from './components/MigratePanel'
 import Header from './components/Header'
-
-type Step = 'select' | 'preview' | 'migrate'
+import MigratePanel from './components/MigratePanel'
+import SessionList from './components/SessionList'
 
 export default function App() {
   const [projectPath, setProjectPath] = useState('')
   const [direction, setDirection] = useState<Direction>('claude-to-codex')
   const [sessions, setSessions] = useState<Session[]>([])
-  const [selectedSession, setSelectedSession] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [context, setContext] = useState<ContextInfo | null>(null)
-  const [step, setStep] = useState<Step>('select')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [knownProjects, setKnownProjects] = useState<ProjectEntry[]>([])
 
-  // 加载已知项目
-  useEffect(() => {
-    api.listProjects()
-      .then(setKnownProjects)
-      .catch(() => {})
-  }, [])
+  const isForward = direction === 'claude-to-codex'
+  const sourceLabel = isForward ? 'Claude Code' : 'Codex'
+  const targetLabel = isForward ? 'Codex' : 'Claude Code'
+  const visibleProjects = useMemo(() => knownProjects.filter(p => p.has_sessions), [knownProjects])
 
-  // Codex 方向时自动加载会话（无需项目路径）
-  useEffect(() => {
-    if (direction === 'codex-to-claude' && !projectPath) {
-      loadSessions('', direction)
-    }
-  }, [direction])
+  useEffect(() => { api.listProjects().then(setKnownProjects).catch(() => {}) }, [])
 
-  // 加载会话列表
-  const loadSessions = useCallback(async (path: string, dir: Direction) => {
+  useEffect(() => {
+    if (direction === 'codex-to-claude' && !projectPath) loadSessions('', direction)
+  }, [direction, projectPath])
+
+  const loadSessions = async (path: string, dir: Direction) => {
     setLoading(true)
     setError(null)
     try {
@@ -44,31 +38,28 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }
 
   useEffect(() => {
     if (projectPath && direction === 'claude-to-codex') loadSessions(projectPath, direction)
-  }, [projectPath, direction, loadSessions])
+  }, [projectPath, direction])
 
-  // 切换方向
   const handleDirectionChange = (dir: Direction) => {
     setDirection(dir)
     setProjectPath('')
     setSessions([])
-    setStep('select')
     setContext(null)
-    setSelectedSession(null)
+    setSelectedId(null)
+    setError(null)
   }
 
-  // 选择会话并提取上下文
   const handleSelectSession = async (sessionId: string) => {
-    setSelectedSession(sessionId)
+    setSelectedId(sessionId)
     setLoading(true)
     setError(null)
     try {
       const ctx = await api.extractContext(projectPath, sessionId, null, direction)
       setContext(ctx)
-      setStep('preview')
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -76,74 +67,71 @@ export default function App() {
     }
   }
 
-  // 使用最新会话
-  const handleUseLatest = async () => {
+  const handleUseLatest = () => {
     if (sessions.length === 0) return
     handleSelectSession(sessions[0].session_id)
   }
 
-  // 返回选择
-  const handleBack = () => {
-    setStep('select')
-    setContext(null)
-    setSelectedSession(null)
-  }
-
-  // 迁移完成后
   const handleMigrateDone = () => {
-    setStep('select')
     setContext(null)
-    setSelectedSession(null)
+    setSelectedId(null)
     loadSessions(projectPath, direction)
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
-      <Header
-        projectPath={projectPath}
-        direction={direction}
-        onDirectionChange={handleDirectionChange}
-        onProjectPathChange={(p) => { setProjectPath(p); loadSessions(p, direction); }}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)', overflow: 'hidden', position: 'relative' }}>
+      <Header direction={direction} onDirectionChange={handleDirectionChange} />
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-6">
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-300 text-red-700 text-sm">
-            {error}
-          </div>
-        )}
+      {error && (
+        <div style={{ padding: '8px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(196,61,50,0.08)', color: 'var(--error)', fontSize: 13 }}>{error}</div>
+        </div>
+      )}
 
-        {step === 'select' && (
+      {/* Three-column workspace */}
+      <main style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 1, background: 'var(--border)' }}>
+        {/* Column 1 — Session List */}
+        <div style={{ width: 320, flexShrink: 0 }}>
           <SessionList
             sessions={sessions}
             loading={loading}
-            projectPath={projectPath}
             direction={direction}
-            knownProjects={knownProjects}
+            knownProjects={visibleProjects}
+            selectedId={selectedId}
             onSelect={handleSelectSession}
             onUseLatest={handleUseLatest}
             onRefresh={() => loadSessions(projectPath, direction)}
-            onProjectPathChange={(p) => { setProjectPath(p); loadSessions(p, direction); }}
+            onProjectPathChange={p => { setProjectPath(p); loadSessions(p, direction) }}
           />
-        )}
+        </div>
 
-        {step === 'preview' && context && (
-          <div className="space-y-4">
-            <button
-              onClick={handleBack}
-              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm flex items-center gap-1"
-            >
-              ← 返回会话列表
-            </button>
-            <ContextPreview context={context} />
-            <MigratePanel
-              projectPath={projectPath}
-              sessionId={selectedSession || undefined}
-              direction={direction}
-              onComplete={handleMigrateDone}
-            />
-          </div>
-        )}
+        {/* Column 2 — Context Preview */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {context ? (
+            <ContextPreview context={context} sourceLabel={sourceLabel} targetLabel={targetLabel} />
+          ) : (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              height: '100%', background: 'var(--surface)', padding: 32, gap: 12,
+            }}>
+              <div style={{ fontSize: 32, color: 'var(--border)' }}>⇠</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>选择一个会话</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', maxWidth: 260 }}>
+                从左侧列表选择要预览的会话上下文
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Column 3 — Migrate Panel */}
+        <div style={{ width: 320, flexShrink: 0 }}>
+          <MigratePanel
+            projectPath={projectPath}
+            sessionId={selectedId || undefined}
+            direction={direction}
+            onComplete={handleMigrateDone}
+          />
+        </div>
       </main>
     </div>
   )

@@ -121,11 +121,7 @@ fn launch_in_terminal(shell_cmd: &str) -> Result<u32, String> {
     {
         let script = format!(
             "tell app \"Terminal\"\n\
-             \x20 if (count of windows) = 0 then\n\
-             \x20 \x20 do script \"{0}\"\n\
-             \x20 else\n\
-             \x20 \x20 do script \"{0}\" in front window\n\
-             \x20 end if\n\
+             \x20 do script \"{0}\"\n\
              \x20 activate\n\
              end tell",
             shell_cmd.replace('\"', "\\\"")
