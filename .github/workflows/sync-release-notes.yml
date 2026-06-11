@@ -1,0 +1,54 @@
+name: Sync Release Notes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/release-notes/**'
+      - '.github/workflows/sync-release-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          found=0
+          for notes_file in .github/release-notes/v*.md; do
+            found=1
+            tag="$(basename "$notes_file" .md)"
+
+            for attempt in {1..30}; do
+              if gh release view "$tag" >/dev/null 2>&1; then
+                gh release edit "$tag" --notes-file "$notes_file"
+                echo "Updated release notes for $tag"
+                break
+              fi
+
+              if [ "$attempt" -eq 30 ]; then
+                echo "Release $tag not found after waiting"
+                exit 1
+              fi
+
+              echo "Release $tag not found yet, retrying..."
+              sleep 20
+            done
+          done
+
+          if [ "$found" -eq 0 ]; then
+            echo "No release notes files found"
+            exit 1
+          fi
