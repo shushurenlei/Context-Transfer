@@ -91,6 +91,28 @@ jobs:
           cd src-tauri
           ../frontend/node_modules/.bin/tauri build
 
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' | head -n 1)"
+            if [ -n "$app_path" ]; then
+              ditto -c -k --sequesterRsrc --keepParent "$app_path" "target/release/bundle/macos/Context.Transfer_${version}_aarch64.app.zip"
+            fi
+
+            for dmg in target/release/bundle/dmg/*.dmg; do
+              [ -e "$dmg" ] || continue
+              if hdiutil verify "$dmg" && attach_output="$(hdiutil attach -nobrowse -readonly "$dmg")"; then
+                echo "$attach_output"
+                device="$(echo "$attach_output" | awk '/\/Volumes\// { print $1; exit }')"
+                if [ -n "$device" ]; then
+                  hdiutil detach "$device"
+                fi
+              else
+                echo "::warning::Removing non-mountable DMG: $dmg"
+                rm -f "$dmg"
+              fi
+            done
+          fi
+
       - name: Upload Tauri bundles
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
@@ -101,6 +123,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.rpm
             src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.zip
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
