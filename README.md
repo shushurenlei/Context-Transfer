@@ -3,7 +3,7 @@
   <p><strong>AI 编码助手上下文迁移工具</strong></p>
 
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.1.4-blue" />
+    <img alt="Version" src="https://img.shields.io/badge/version-0.1.5-blue" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" />
     <img alt="Built with" src="https://img.shields.io/badge/built%20with-Tauri%202-6366f1" />
     <img alt="Downloads" src="https://img.shields.io/github/downloads/shushurenlei/Context-Transfer/total?color=green" />
@@ -24,13 +24,13 @@
 
 支持 **macOS**、**Windows** 和 **Linux**。
 
-前往 [Releases](https://github.com/shushurenlei/Context-Transfer/releases) 页面下载最新版本：
+前往 [v0.1.5 Releases](https://github.com/shushurenlei/Context-Transfer/releases/tag/v0.1.5) 页面下载最新版本：
 
 | 文件 | 平台 |
 |------|------|
-| `Context Transfer_0.1.0_aarch64.dmg` | macOS (Apple Silicon) |
-| `Context Transfer_0.1.0_x64.msi` | Windows (x64) |
-| `Context Transfer_0.1.0_amd64.deb` | Linux (Debian/Ubuntu) |
+| `Context Transfer_0.1.5_aarch64.dmg` | macOS (Apple Silicon) |
+| `Context Transfer_0.1.5_x64.msi` | Windows (x64) |
+| `Context Transfer_0.1.5_amd64.deb` | Linux (Debian/Ubuntu) |
 
 ## ✨ 功能特性
 
